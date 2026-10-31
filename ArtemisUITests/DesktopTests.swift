@@ -139,7 +139,8 @@ final class DesktopTests: XCTestCase {
     /// iOS keyboard, or typed from the clipboard, goes as keys (Shift for capitals and "!").
     func testTypedPassword() {
         let tag = "\(appearance)-portrait-L-password"
-        let (app, desktop) = connect(orientation: .portrait)
+        // The app puts it on the clipboard (the test runner can't from the background)
+        let (app, desktop) = connect(orientation: .portrait, extra: ["-ArtemisDemoClipboard", "Pa55word!"])
         let video = videoFrame(desktop)
         XCTAssertTrue(MultiTouch.drag(fingers: [CGPoint(x: video.midX - 40, y: video.midY), CGPoint(x: video.midX, y: video.midY),
                                                 CGPoint(x: video.midX + 40, y: video.midY)], by: .zero, duration: 0.1, testCase: self))
@@ -155,7 +156,6 @@ final class DesktopTests: XCTestCase {
         // Type Clipboard, from the shortcuts menu (iOS asks before the app reads the clipboard).
         // Upright the bar is at the bottom, under the keyboard: close the keyboard first
         closeKeyboard(app)
-        UIPasteboard.general.string = "Pa55word!"
         count = state(desktop).count
         app.buttons["bar.shortcuts"].tap()
         let typeClipboard = app.buttons["Type Clipboard"].firstMatch
@@ -209,6 +209,148 @@ final class DesktopTests: XCTestCase {
             app.terminate()
             XCUIDevice.shared.orientation = .portrait
         }
+    }
+
+    // MARK: Control bar and layout
+
+    /// The bar shows icons only (no captions), upright and in landscape, at the default and the
+    /// largest text size: each button still has its name for VoiceOver and a 44-point target.
+    func testBarShowsIconsOnly() {
+        let names = ["bar.keyboard": "Keyboard", "bar.mode": "Trackpad Mode", "bar.gamepad": "Controller",
+                     "bar.shortcuts": "Shortcuts", "bar.disconnect": "Disconnect"]
+        for (size, sizeName) in [("UICTContentSizeCategoryL", "L"), ("UICTContentSizeCategoryAccessibilityXXXL", "AX5")] {
+            for (orientation, name) in [(UIDeviceOrientation.portrait, "portrait"), (.landscapeLeft, "landscape")] {
+                let tag = "\(appearance)-\(name)-\(sizeName)-bar-icons"
+                let (app, _) = connect(size: size, orientation: orientation)
+                for (id, label) in names.sorted(by: { $0.key < $1.key }) {
+                    let button = app.buttons[id]
+                    XCTAssertTrue(button.exists, "\(tag): no \(id)")
+                    XCTAssertEqual(button.label, label, "\(tag): \(id)'s name")
+                    XCTAssertGreaterThanOrEqual(button.frame.width, 44, "\(tag): \(id) narrower than 44 points")
+                    XCTAssertGreaterThanOrEqual(button.frame.height, 44, "\(tag): \(id) lower than 44 points")
+                    let ink = inkUnderIcon(button)
+                    XCTAssertLessThan(ink, 0.01, "\(tag): \(id) shows a caption under its icon (\(Int(ink * 100)) % ink)")
+                }
+                shot("\(tag)-1-bar")
+                app.terminate()
+                XCUIDevice.shared.orientation = .portrait
+            }
+        }
+    }
+
+    /// The share of a button's bottom fifth that differs strongly from its background: a
+    /// caption's strokes (an icon alone sits in the middle and leaves it empty).
+    private func inkUnderIcon(_ button: XCUIElement) -> Double {
+        let image = button.screenshot().image
+        guard let cg = image.cgImage else { return 1 }
+        let width = cg.width, height = cg.height
+        var pixels = [UInt8](repeating: 0, count: width * height * 4)
+        guard let context = CGContext(data: &pixels, width: width, height: height, bitsPerComponent: 8, bytesPerRow: width * 4,
+                                      space: CGColorSpaceCreateDeviceRGB(), bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue) else { return 1 }
+        context.draw(cg, in: CGRect(x: 0, y: 0, width: width, height: height))
+        // Rows of the bottom fifth (the bitmap's first rows are the image's top), clear of the sides
+        let rows = Int(Double(height) * 0.8)..<height
+        let columns = width / 10..<(width - width / 10)
+        var luminances: [Double] = []
+        for y in rows {
+            for x in columns {
+                let i = (y * width + x) * 4
+                luminances.append(0.2126 * Double(pixels[i]) / 255 + 0.7152 * Double(pixels[i + 1]) / 255 + 0.0722 * Double(pixels[i + 2]) / 255)
+            }
+        }
+        guard !luminances.isEmpty else { return 1 }
+        let median = luminances.sorted()[luminances.count / 2]
+        return Double(luminances.filter { abs($0 - median) > 0.3 }.count) / Double(luminances.count)
+    }
+
+    /// Upright in direct mode there's no trackpad: the desktop sits centred between the top of
+    /// the safe area and the bar, a tap lands where the finger is, the keyboard lies over it and
+    /// the on-screen controller still takes the trackpad's place. Back in trackpad mode, the
+    /// trackpad comes back and the desktop goes back to the top.
+    func testDirectModeUprightCentresDesktop() {
+        let tag = "\(appearance)-portrait-L-direct-mode"
+        let (app, desktop) = connect(orientation: .portrait)
+        let trackpad = app.otherElements["trackpad"].firstMatch
+        XCTAssertTrue(trackpad.exists, "\(tag): no trackpad to start with")
+        // In trackpad mode the desktop starts at the safe area's top
+        let safeTop = settledFrame(desktop).minY
+
+        func assertCentred(_ step: String) {
+            let frame = settledFrame(desktop), barTop = barFrame(desktop).minY
+            let above = frame.minY - safeTop, below = barTop - frame.maxY
+            XCTAssertGreaterThan(above, 20, "\(tag) \(step): the desktop isn't moved down (\(frame))")
+            XCTAssertEqual(above, below, accuracy: 1, "\(tag) \(step): not centred (\(above) above, \(below) below; \(frame), bar at \(barTop))")
+        }
+
+        app.buttons["bar.mode"].tap()
+        XCTAssertTrue(state(desktop).status.contains("direct"), "\(tag): \(state(desktop).status)")
+        XCTAssertTrue(gone(trackpad), "\(tag): the trackpad is still there in direct mode")
+        assertCentred("direct")
+        shot("\(tag)-1-centred")
+
+        // A tap lands on the desktop where the finger is
+        let video = videoFrame(desktop)
+        var count = state(desktop).count
+        app.coordinate(withNormalizedOffset: .zero)
+            .withOffset(CGVector(dx: video.minX + video.width * 0.25, dy: video.minY + video.height * 0.75)).tap()
+        sleep(1)
+        var new = events(desktop, since: count)
+        if let landing = moves(new).last {
+            XCTAssertEqual(Double(landing.0), 480, accuracy: 20, "\(tag) tap x: \(new)")
+            XCTAssertEqual(Double(landing.1), 810, accuracy: 20, "\(tag) tap y: \(new)")
+        } else {
+            XCTFail("\(tag) tap: no move (\(new))")
+        }
+        XCTAssertEqual(new.filter { $0.hasSuffix("left") }, ["down left", "up left"], "\(tag) tap: \(new)")
+
+        // The keyboard lies over it: nothing moves
+        let centred = desktop.frame
+        openKeyboard(app, tag: tag)
+        XCTAssertEqual(desktop.frame, centred, "\(tag): the desktop moved with the keyboard up")
+        closeKeyboard(app)
+        sleep(1)
+        XCTAssertEqual(desktop.frame, centred, "\(tag): the desktop moved after the keyboard closed")
+
+        // The on-screen controller takes the trackpad's place under the desktop, then gives it back
+        app.buttons["bar.gamepad"].tap()
+        let padA = app.buttons["pad.A"].firstMatch
+        XCTAssertTrue(padA.waitForExistence(timeout: 5), "\(tag): no controller")
+        XCTAssertEqual(settledFrame(desktop).minY, safeTop, accuracy: 1, "\(tag): the desktop isn't at the top with the controller")
+        XCTAssertGreaterThan(padA.frame.minY, desktop.frame.maxY, "\(tag): the controller isn't under the desktop")
+        count = state(desktop).count
+        padA.press(forDuration: 0.2)
+        sleep(1)
+        new = events(desktop, since: count)
+        XCTAssertTrue(new.contains { $0.hasPrefix("gamepad 0x1000") }, "\(tag) controller A: \(new)")
+        XCTAssertFalse(trackpad.exists, "\(tag): a trackpad with the controller in direct mode")
+        shot("\(tag)-2-controller")
+        app.buttons["bar.gamepad"].tap()
+        XCTAssertTrue(gone(padA), "\(tag): the controller didn't hide")
+        XCTAssertFalse(trackpad.exists, "\(tag): the trackpad came back in direct mode")
+        assertCentred("controller hidden")
+
+        // Trackpad mode again: the trackpad comes back under the desktop at the top
+        app.buttons["bar.mode"].tap()
+        XCTAssertTrue(state(desktop).status.contains("trackpad"), "\(tag): \(state(desktop).status)")
+        XCTAssertTrue(trackpad.waitForExistence(timeout: 3), "\(tag): the trackpad didn't come back")
+        XCTAssertEqual(settledFrame(desktop).minY, safeTop, accuracy: 1, "\(tag): the desktop didn't go back to the top")
+        XCTAssertGreaterThan(trackpad.frame.minY, desktop.frame.maxY - 1, "\(tag): the trackpad isn't under the desktop")
+        shot("\(tag)-3-trackpad")
+        app.terminate()
+    }
+
+    /// The bar's frame, as the desktop's state line reports it ("bar frame x y width height").
+    private func barFrame(_ desktop: XCUIElement) -> CGRect {
+        let status = state(desktop).status
+        guard let range = status.range(of: " bar frame ") else { return .null }
+        let n = status[range.upperBound...].split(separator: " ").prefix(4).compactMap { Double($0) }
+        return n.count == 4 ? CGRect(x: n[0], y: n[1], width: n[2], height: n[3]) : .null
+    }
+
+    /// Waits (up to 3 s) until the element is gone.
+    private func gone(_ element: XCUIElement) -> Bool {
+        XCTWaiter.wait(for: [XCTNSPredicateExpectation(predicate: NSPredicate(format: "exists == false"), object: element)],
+                       timeout: 3) == .completed
     }
 
     /// The hide-keyboard button sits at the right end of the key row on its own glass; the keys
@@ -656,8 +798,11 @@ final class DesktopTests: XCTestCase {
         app.buttons["bar.mode"].tap()
         XCTAssertTrue(state(desktop).status.contains("direct"), "\(tag): \(state(desktop).status)")
         count = state(desktop).count
+        // Upright the desktop moves to the middle (no trackpad in direct mode): measured again
+        _ = settledFrame(desktop)
+        let directVideo = videoFrame(desktop)
         let target = XCUIApplication().coordinate(withNormalizedOffset: .zero)
-            .withOffset(CGVector(dx: video.minX + video.width * 0.25, dy: video.minY + video.height * 0.75))
+            .withOffset(CGVector(dx: directVideo.minX + directVideo.width * 0.25, dy: directVideo.minY + directVideo.height * 0.75))
         target.tap()
         sleep(1)
         new = events(desktop, since: count)

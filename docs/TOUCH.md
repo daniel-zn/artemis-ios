@@ -48,7 +48,8 @@ points of an edge. The control bar shows a reset button (`1×`) while zoomed; a 
 A Liquid Glass capsule over the desktop in landscape; in portrait a row at the bottom of the screen, under the
 trackpad (above the home indicator).
 
-- Keyboard, pointer mode (trackpad / direct), controller (shows or hides the on-screen controller), shortcuts, zoom
+- Icons only, no captions (VoiceOver reads each button's name; each is at least 44 points;
+  `DesktopTests/testBarShowsIconsOnly`): keyboard, pointer mode (trackpad / direct), controller (shows or hides the on-screen controller), shortcuts, zoom
   reset (while zoomed), disconnect (one tap ends the session, no confirming menu). There's no right-click
   button: a two-finger tap or a press and hold right-clicks. Room is left for a microphone button (mic passthrough
   is a later phase).
@@ -102,9 +103,11 @@ how Apollo types.
 
 - **Landscape:** the desktop fills the screen (letterboxed to its aspect ratio, inside the safe area horizontally),
   with the floating control bar.
-- **Portrait:** the desktop fits the top of the screen. Below it a trackpad area (always trackpad, whatever the mode;
-  no click buttons: tap to click, two-finger tap or press and hold to right-click), then the control bar at the
-  bottom.
+- **Portrait:** the desktop fits the top of the screen. Below it a trackpad area (always trackpad; no click buttons:
+  tap to click, two-finger tap or press and hold to right-click), then the control bar at the bottom. In direct mode
+  there's no trackpad area: the desktop moves (animated) to the middle between the top of the safe area and the bar,
+  and back to the top with the trackpad in trackpad mode or with the on-screen controller up
+  (`DesktopTests/testDirectModeUprightCentresDesktop`).
 - The keyboard and its key row lie on top: the desktop, the trackpad area and the control bar keep their size and
   place when it opens or closes, even where it covers them (`DesktopTests/testKeyboardOverlays`).
 - Haptics: light on clicks, medium when a press and hold starts, selection ticks on modifier keys.

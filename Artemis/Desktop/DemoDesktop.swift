@@ -55,6 +55,11 @@ final class DemoDesktopViewController: UIViewController {
         super.viewDidAppear(animated)
         setNeedsUpdateOfScreenEdgesDeferringSystemGestures()
         setNeedsUpdateOfHomeIndicatorAutoHidden()
+        // The clipboard for Type Clipboard in the UI tests (-ArtemisDemoClipboard "<text>"): the test
+        // runner, in the background, can't write it
+        if let text = UserDefaults.standard.string(forKey: "ArtemisDemoClipboard") {
+            UIPasteboard.general.string = text
+        }
         // A connected controller for the UI tests (-ArtemisDemoController "<steps>"), see DemoControllerScript
         if controllerScript == nil, let script = UserDefaults.standard.string(forKey: "ArtemisDemoController") {
             controllerScript = DemoControllerScript(mouse: desktop.gamepadMouse, input: input)

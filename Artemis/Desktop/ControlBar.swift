@@ -11,7 +11,6 @@ import SwiftUI
 
 struct ControlBar: View {
     let session: DesktopSession
-    @Environment(\.dynamicTypeSize) private var typeSize
 
     var body: some View {
         Group {
@@ -23,19 +22,17 @@ struct ControlBar: View {
                 folded
             }
         }
-        // The bar stays a bar: icons are fixed, captions scale up to a point
-        .dynamicTypeSize(...DynamicTypeSize.accessibility1)
         .animation(.snappy(duration: 0.25), value: session.barExpanded)
         .animation(.snappy(duration: 0.25), value: session.isZoomed)
     }
 
     // MARK: Layouts
 
-    /// Upright: a full-width row under the desktop, with captions.
+    /// Upright: a full-width row under the desktop, its buttons sharing the width.
     private var docked: some View {
         GlassEffectContainer(spacing: 8) {
             HStack(spacing: 4) {
-                buttons(captions: !typeSize.isAccessibilitySize)
+                buttons(wide: true)
             }
             .padding(.horizontal, 8)
             .padding(.vertical, 6)
@@ -50,11 +47,11 @@ struct ControlBar: View {
         GlassEffectContainer(spacing: 8) {
             HStack(spacing: 2) {
                 grip
-                buttons(captions: false)
+                buttons(wide: false)
                 Button {
                     session.actions.setBarExpanded(false)
                 } label: {
-                    BarIcon(symbol: "chevron.compact.right", caption: nil)
+                    BarIcon(symbol: "chevron.compact.right")
                 }
                 .accessibilityLabel("Fold Control Bar")
                 .accessibilityIdentifier("bar.fold")
@@ -92,12 +89,12 @@ struct ControlBar: View {
     // MARK: Buttons
 
     @ViewBuilder
-    private func buttons(captions: Bool) -> some View {
+    private func buttons(wide: Bool) -> some View {
         Button {
             session.actions.toggleKeyboard()
         } label: {
             BarIcon(symbol: session.keyboardShown ? "keyboard.chevron.compact.down" : "keyboard",
-                    caption: captions ? "Keyboard" : nil, active: session.keyboardShown)
+                    active: session.keyboardShown, wide: wide)
         }
         .accessibilityLabel(session.keyboardShown ? "Hide Keyboard" : "Keyboard")
         .accessibilityIdentifier("bar.keyboard")
@@ -106,7 +103,7 @@ struct ControlBar: View {
             session.actions.setMode(session.mode == .trackpad ? .direct : .trackpad)
         } label: {
             BarIcon(symbol: session.mode == .trackpad ? "rectangle.and.hand.point.up.left" : "hand.point.up.left",
-                    caption: captions ? (session.mode == .trackpad ? "Trackpad" : "Direct") : nil)
+                    wide: wide)
         }
         .accessibilityLabel(session.mode == .trackpad ? "Trackpad Mode" : "Direct Mode")
         .accessibilityHint("Switches between moving the pointer like a trackpad and touching the desktop directly")
@@ -116,7 +113,7 @@ struct ControlBar: View {
             session.actions.toggleGamepad()
         } label: {
             BarIcon(symbol: session.gamepadShown ? "gamecontroller.fill" : "gamecontroller",
-                    caption: captions ? "Controller" : nil, active: session.gamepadShown)
+                    active: session.gamepadShown, wide: wide)
         }
         .accessibilityLabel(session.gamepadShown ? "Hide Controller" : "Controller")
         .accessibilityHint("Shows a game controller on the screen; the PC sees it as an Xbox controller")
@@ -139,7 +136,7 @@ struct ControlBar: View {
             }
             Button("Type Clipboard", systemImage: "doc.on.clipboard.fill") { session.actions.typeClipboard() }
         } label: {
-            BarIcon(symbol: "command", caption: captions ? "Shortcuts" : nil)
+            BarIcon(symbol: "command", wide: wide)
         }
         .menuOrder(.fixed)
         .accessibilityLabel("Shortcuts")
@@ -150,7 +147,7 @@ struct ControlBar: View {
             Button {
                 session.actions.resetZoom()
             } label: {
-                BarIcon(symbol: "arrow.down.right.and.arrow.up.left", caption: captions ? "Fit" : nil)
+                BarIcon(symbol: "arrow.down.right.and.arrow.up.left", wide: wide)
             }
             .accessibilityLabel("Reset Zoom")
             .accessibilityIdentifier("bar.resetZoom")
@@ -160,7 +157,7 @@ struct ControlBar: View {
         Button {
             session.actions.disconnect()
         } label: {
-            BarIcon(symbol: "xmark", caption: captions ? "Disconnect" : nil, tint: .red)
+            BarIcon(symbol: "xmark", tint: .red, wide: wide)
         }
         .accessibilityLabel("Disconnect")
         .accessibilityIdentifier("bar.disconnect")
@@ -227,28 +224,20 @@ private struct FoldedBar: View {
     }
 }
 
-/// An icon of the bar, with an optional caption under it.
+/// An icon of the bar (no caption: the buttons' accessibility labels name them).
 private struct BarIcon: View {
     let symbol: String
-    let caption: String?
     var active = false
     var tint: Color? = nil
+    /// Shares the row's width with the others (the upright bar).
+    var wide = false
 
     var body: some View {
-        VStack(spacing: 3) {
-            Image(systemName: symbol)
-                .font(.system(size: 19, weight: .medium))
-                .frame(height: 24)
-            if let caption {
-                Text(caption)
-                    .artemisFont(.caption2)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.7)
-            }
-        }
-        .foregroundStyle(tint ?? (active ? Color.accentColor : Color.primary))
-        .frame(minWidth: 44, maxWidth: caption == nil ? nil : .infinity, minHeight: 44)
-        .padding(.vertical, caption == nil ? 0 : 2)
-        .contentShape(.rect)
+        Image(systemName: symbol)
+            .font(.system(size: 19, weight: .medium))
+            .frame(height: 24)
+            .foregroundStyle(tint ?? (active ? Color.accentColor : Color.primary))
+            .frame(minWidth: 44, maxWidth: wide ? .infinity : nil, minHeight: 44)
+            .contentShape(.rect)
     }
 }

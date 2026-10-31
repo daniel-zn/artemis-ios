@@ -226,17 +226,24 @@ final class DesktopViewController: UIViewController {
                                                       height: bounds.height))
         let padSize = AppPreferences.onScreenGamepadSize
         if portrait {
-            // The desktop across the top, the trackpad (or the controller) under it, the bar at the bottom
+            // The desktop across the top, the trackpad (or the controller) under it, the bar at the
+            // bottom. In direct mode without the controller there's no trackpad: the desktop sits
+            // in the middle between the top and the bar
             let aspect = streamSize.width / streamSize.height
             let barY = bounds.maxY - max(insets.bottom, 12) - barSize.height
             let available = max(120, barY - insets.top - 16)
             let height = min(bounds.width / aspect, available)
-            canvas.frame = CGRect(x: 0, y: insets.top, width: bounds.width, height: height)
+            let centred = session.mode == .direct && !session.gamepadShown
+            let top = centred ? insets.top + max(0, barY - insets.top - height) / 2 : insets.top
+            canvas.frame = CGRect(x: 0, y: top, width: bounds.width, height: height)
             placeBar(CGRect(x: 0, y: barY, width: bounds.width, height: barSize.height))
-            let areaTop = canvas.frame.maxY + 10
+            let areaTop = insets.top + height + 10
             let areaBottom = barY - 10
             let area = CGRect(x: 12, y: areaTop, width: bounds.width - 24, height: max(0, areaBottom - areaTop))
+            // Faded rather than hidden, so it goes and comes with the desktop's move
             trackpadArea.isHidden = area.height < 60 || session.gamepadShown
+            trackpadArea.alpha = centred ? 0 : 1
+            trackpadArea.accessibilityElementsHidden = centred
             trackpadArea.frame = area
             gamepad.frame = area
             gamepad.isHidden = !session.gamepadShown || area.height < 60
@@ -547,9 +554,18 @@ final class DesktopViewController: UIViewController {
             session.gamepadShown = false
             input.gamepadDisconnect()
         }
-        view.setNeedsLayout()
+        layoutAnimated()
         relayoutBar()
         updateAccessibilityValue()
+    }
+
+    /// Lays the screen out again, animated: upright, the desktop moves when the trackpad goes or
+    /// comes back (direct mode, the controller).
+    private func layoutAnimated() {
+        view.setNeedsLayout()
+        UIView.animate(springDuration: 0.4, bounce: 0, options: [.allowUserInteraction, .beginFromCurrentState]) {
+            self.view.layoutIfNeeded()
+        }
     }
 
     // MARK: Control bar
@@ -579,6 +595,7 @@ final class DesktopViewController: UIViewController {
         actions.setMode = { [weak self] mode in
             self?.session.mode = mode
             self?.haptic(.light)
+            self?.layoutAnimated()
             self?.relayoutBar()
             self?.updateAccessibilityValue()
         }

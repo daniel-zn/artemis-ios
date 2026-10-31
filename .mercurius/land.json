@@ -61,6 +61,7 @@
               "Artemis/Desktop/KeyRow.swift",
               "Artemis/Desktop/ControlBar.swift",
               "Artemis/Desktop/TouchInterpreter.swift",
+              "Artemis/Desktop/DesktopViewController.swift",
               "ArtemisUITests/DesktopTests.swift"
             ],
             "tests": [
