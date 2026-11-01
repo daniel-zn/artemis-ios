@@ -45,8 +45,9 @@ points of an edge. The control bar shows a reset button (`1×`) while zoomed; a 
 
 ## The control bar
 
-A Liquid Glass capsule over the desktop in landscape; in portrait a row at the bottom of the screen, under the
-trackpad (above the home indicator).
+A Liquid Glass capsule over the desktop in landscape; in portrait the same capsule of icons (same size and
+spacing, without the grip and fold button), centred at the bottom of the screen under the trackpad, above the home
+indicator (`DesktopTests/testUprightBarSpacedLikeLandscape`).
 
 - Icons only, no captions (VoiceOver reads each button's name; each is at least 44 points;
   `DesktopTests/testBarShowsIconsOnly`): keyboard, pointer mode (trackpad / direct), controller (shows or hides the on-screen controller), shortcuts, zoom
@@ -74,7 +75,9 @@ The iOS keyboard, with a key row above it that sends real key events (`LiSendKey
   (`DesktopTests/testKeyRowScrolls`).
 - A key lights up and fires only on a tap: a finger that lands on a key and swipes the row sideways scrolls it,
   and that key neither lights up nor sends anything (the row's scroll view delays and cancels the key's touch,
-  as UIKit's own scroll views do; `DesktopTests/testKeyRowScrolls`).
+  as UIKit's own scroll views do; `DesktopTests/testKeyRowScrolls`). The keys' glass isn't interactive (its own
+  press effect reacts to any touch, swipes too, and draws past the key when tapped fast): a key grows as it lights
+  up instead, and nothing of it is ever drawn outside it (`DesktopTests/testRapidKeyTapsLeaveNoGhost`).
 - The hide-keyboard button (`keyboard.chevron.compact.down`) stays at the right end of the row on its own glass.
   The keys scroll on underneath it, fading out from just before it to its middle (a gradient mask on the row's
   scroll view, which runs the full width), and the row ends far enough to its left that the last key scrolls fully
@@ -107,7 +110,8 @@ how Apollo types.
   tap to click, two-finger tap or press and hold to right-click), then the control bar at the bottom. In direct mode
   there's no trackpad area: the desktop moves (animated) to the middle between the top of the safe area and the bar,
   and back to the top with the trackpad in trackpad mode or with the on-screen controller up
-  (`DesktopTests/testDirectModeUprightCentresDesktop`).
+  (`DesktopTests/testDirectModeUprightCentresDesktop`). The desktop moves in front of the fading trackpad,
+  both ways (`DesktopTests/testModeSwitchMovesDesktopInFrontOfTrackpad`).
 - The keyboard and its key row lie on top: the desktop, the trackpad area and the control bar keep their size and
   place when it opens or closes, even where it covers them (`DesktopTests/testKeyboardOverlays`).
 - Haptics: light on clicks, medium when a press and hold starts, selection ticks on modifier keys.

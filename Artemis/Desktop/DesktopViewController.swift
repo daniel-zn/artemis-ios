@@ -114,6 +114,9 @@ final class DesktopViewController: UIViewController {
         canvas.accessibilityTraits = .allowsDirectInteraction
         canvas.accessibilityIdentifier = "desktop"
         canvas.touchHandler = touchHandler
+        // Under the desktop: upright, the desktop moves over it as it fades out or in
+        trackpadArea.touchHandler = touchHandler
+        view.addSubview(trackpadArea)
         view.addSubview(canvas)
         canvas.addSubview(contentView)
         if let localCursor {
@@ -131,9 +134,6 @@ final class DesktopViewController: UIViewController {
         fitButton.addAction(UIAction { [weak self] _ in self?.resetZoomAnimated() }, for: .primaryActionTriggered)
         fitButton.isHidden = true
         view.addSubview(fitButton)
-
-        trackpadArea.touchHandler = touchHandler
-        view.addSubview(trackpadArea)
 
         gamepad.isHidden = true
         gamepad.accessibilityIdentifier = "gamepad"
@@ -236,7 +236,7 @@ final class DesktopViewController: UIViewController {
             let centred = session.mode == .direct && !session.gamepadShown
             let top = centred ? insets.top + max(0, barY - insets.top - height) / 2 : insets.top
             canvas.frame = CGRect(x: 0, y: top, width: bounds.width, height: height)
-            placeBar(CGRect(x: 0, y: barY, width: bounds.width, height: barSize.height))
+            placeBar(CGRect(x: (bounds.width - barSize.width) / 2, y: barY, width: barSize.width, height: barSize.height))
             let areaTop = insets.top + height + 10
             let areaBottom = barY - 10
             let area = CGRect(x: 12, y: areaTop, width: bounds.width - 24, height: max(0, areaBottom - areaTop))
@@ -673,6 +673,8 @@ final class DesktopViewController: UIViewController {
         lines[0] += " · edges " + Self.describe(deferredEdges)
         lines[0] += " · on-screen controller " + (session.gamepadShown ? "shown" : "hidden")
         lines[0] += " · notices \(toastCount)"
+        let order = view.subviews
+        lines[0] += " · desktop over trackpad " + ((order.firstIndex(of: canvas) ?? 0) > (order.firstIndex(of: trackpadArea) ?? 0) ? "yes" : "no")
         let exclusive = view.interactions.contains { ($0 as? GCEventInteraction).map { $0.handledEventTypes.contains(.gamepad) && !$0.receivesEventsInView } ?? false }
         lines[0] += " · controller events " + (exclusive ? "game controller only" : "shared")
         let safe = view.safeAreaInsets
@@ -684,6 +686,7 @@ final class DesktopViewController: UIViewController {
                            view.bounds.width, view.bounds.height)
         if let keyRow {
             lines[0] += " · key highlights \(keyRow.highlightCount) · key down \(keyRow.highlightedKey ?? "none")"
+            lines[0] += " · key growths \(keyRow.growths) · key strays \(keyRow.strays)"
         }
         if let events = recordedEvents?() {
             lines.append("events \(events.count)")

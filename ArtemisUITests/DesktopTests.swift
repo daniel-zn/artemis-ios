@@ -339,6 +339,71 @@ final class DesktopTests: XCTestCase {
         app.terminate()
     }
 
+    /// Upright, switching modes moves the desktop down to the centre and back while the trackpad
+    /// fades: the desktop goes in front of the trackpad both ways, never behind it.
+    func testModeSwitchMovesDesktopInFrontOfTrackpad() {
+        let tag = "\(appearance)-portrait-L-mode-switch"
+        let (app, desktop) = connect(orientation: .portrait)
+        XCTAssertTrue(state(desktop).status.contains("desktop over trackpad yes"), "\(tag) trackpad mode: \(state(desktop).status)")
+        app.buttons["bar.mode"].tap()
+        // Mid-move (the spring takes 0.4 s)
+        shot("\(tag)-1-to-direct")
+        XCTAssertTrue(state(desktop).status.contains("desktop over trackpad yes"), "\(tag) to direct: \(state(desktop).status)")
+        _ = settledFrame(desktop)
+        app.buttons["bar.mode"].tap()
+        shot("\(tag)-2-to-trackpad")
+        XCTAssertTrue(state(desktop).status.contains("desktop over trackpad yes"), "\(tag) to trackpad: \(state(desktop).status)")
+        // The trackpad still takes its touches: a drag on it moves the pointer
+        let trackpad = app.otherElements["trackpad"].firstMatch
+        XCTAssertTrue(trackpad.waitForExistence(timeout: 3), "\(tag): no trackpad")
+        _ = settledFrame(desktop)
+        let count = state(desktop).count
+        trackpad.coordinate(withNormalizedOffset: CGVector(dx: 0.3, dy: 0.5))
+            .press(forDuration: 0.05, thenDragTo: trackpad.coordinate(withNormalizedOffset: CGVector(dx: 0.7, dy: 0.5)))
+        sleep(1)
+        XCTAssertFalse(moves(events(desktop, since: count)).isEmpty, "\(tag): a drag on the trackpad didn't move the pointer")
+        app.terminate()
+
+        // In slow motion, a picture of the move: the desktop half way down, in front of the fading trackpad
+        let (slow, slowDesktop) = connect(orientation: .portrait, extra: ["-ArtemisDemoSlowMotion", "YES"])
+        // (tap() would wait for the move to end)
+        let mode = slow.buttons["bar.mode"].frame
+        XCTAssertTrue(MultiTouch.timed([(CGPoint(x: mode.midX, y: mode.midY), .zero, 0, 0.05, 0)], testCase: self))
+        usleep(800_000)
+        shot("\(tag)-3-mid-move-slow-motion")
+        XCTAssertTrue(state(slowDesktop).status.contains("desktop over trackpad yes"), "\(tag) slow motion: \(state(slowDesktop).status)")
+        slow.terminate()
+    }
+
+    /// The upright bar hugs its icons: the same icon size and spacing as the landscape bar,
+    /// centred at the bottom, at the default and the largest text size.
+    func testUprightBarSpacedLikeLandscape() {
+        let ids = ["bar.keyboard", "bar.mode", "bar.gamepad", "bar.shortcuts", "bar.disconnect"]
+        for (size, sizeName) in [("UICTContentSizeCategoryL", "L"), ("UICTContentSizeCategoryAccessibilityXXXL", "AX5")] {
+            var measured: [String: (widths: [CGFloat], gaps: [CGFloat], bar: CGRect, screen: CGFloat)] = [:]
+            for (orientation, name) in [(UIDeviceOrientation.landscapeLeft, "landscape"), (.portrait, "portrait")] {
+                let (app, desktop) = connect(size: size, orientation: orientation)
+                let frames = ids.map { app.buttons[$0].frame }.sorted { $0.minX < $1.minX }
+                let gaps = zip(frames, frames.dropFirst()).map { $1.minX - $0.maxX }
+                measured[name] = (frames.map(\.width), gaps, barFrame(desktop), app.windows.firstMatch.frame.width)
+                if name == "portrait" { shot("\(appearance)-portrait-\(sizeName)-bar-hugs") }
+                app.terminate()
+                XCUIDevice.shared.orientation = .portrait
+            }
+            guard let land = measured["landscape"], let up = measured["portrait"] else { XCTFail("not measured"); continue }
+            let tag = "\(appearance)-\(sizeName)-bar-spacing"
+            for (a, b) in zip(up.widths, land.widths) {
+                XCTAssertEqual(a, b, accuracy: 1, "\(tag): upright icon widths \(up.widths), landscape \(land.widths)")
+                XCTAssertGreaterThanOrEqual(a, 44, "\(tag): an icon narrower than 44 points")
+            }
+            for (a, b) in zip(up.gaps, land.gaps) {
+                XCTAssertEqual(a, b, accuracy: 1, "\(tag): upright gaps \(up.gaps), landscape \(land.gaps)")
+            }
+            XCTAssertLessThan(up.bar.width, land.bar.width, "\(tag): the upright bar (\(up.bar)) is wider than the landscape one (\(land.bar))")
+            XCTAssertEqual(up.bar.midX, up.screen / 2, accuracy: 1, "\(tag): the upright bar isn't centred (\(up.bar))")
+        }
+    }
+
     /// The bar's frame, as the desktop's state line reports it ("bar frame x y width height").
     private func barFrame(_ desktop: XCUIElement) -> CGRect {
         let status = state(desktop).status
@@ -443,7 +508,7 @@ final class DesktopTests: XCTestCase {
             let fn = app.buttons["key.page"], esc = app.buttons["key.Esc"], ctrl = app.buttons["key.Ctrl"]
             let fnFrame = fn.frame, escFrame = esc.frame
             let count = state(desktop).count
-            let lit = highlights(desktop)
+            let lit = highlights(desktop), grown = keyCount(desktop, "key growths")
 
             // Swipe the row left, starting on Ctrl, quickly and slowly
             let ctrlFrame = ctrl.frame
@@ -456,6 +521,7 @@ final class DesktopTests: XCTestCase {
             shot("\(tag)-1-scrolled")
             XCTAssertEqual(events(desktop, since: count), [], "\(tag): scrolling the row sent keys")
             XCTAssertEqual(highlights(desktop), lit, "\(tag): a key lit up while the row scrolled")
+            XCTAssertEqual(keyCount(desktop, "key growths"), grown, "\(tag): a key's glass grew while the row scrolled")
             XCTAssertTrue(state(desktop).status.contains("key down none"), "\(tag): \(state(desktop).status)")
             XCTAssertEqual(ctrl.value as? String ?? "", "", "\(tag): Ctrl got pressed by the swipe")
 
@@ -467,6 +533,7 @@ final class DesktopTests: XCTestCase {
             XCTAssertEqual(settledFrame(fn), fnFrame, "\(tag): Fn isn't back at the start of the row")
             XCTAssertEqual(events(desktop, since: count), [], "\(tag): scrolling the row back sent keys")
             XCTAssertEqual(highlights(desktop), lit, "\(tag): a key lit up while the row scrolled back")
+            XCTAssertEqual(keyCount(desktop, "key growths"), grown, "\(tag): a key's glass grew while the row scrolled back")
             XCTAssertTrue(state(desktop).status.contains("key down none"), "\(tag): \(state(desktop).status)")
 
             // A real tap still lights the key up and sends it
@@ -474,6 +541,7 @@ final class DesktopTests: XCTestCase {
             sleep(1)
             XCTAssertEqual(events(desktop, since: count), ["key 0x1B"], "\(tag): Esc after scrolling")
             XCTAssertGreaterThan(highlights(desktop), lit, "\(tag): a tap didn't light the key")
+            XCTAssertGreaterThan(keyCount(desktop, "key growths"), grown, "\(tag): a tap didn't show the key's press")
             XCTAssertTrue(state(desktop).status.contains("key down none"), "\(tag): \(state(desktop).status)")
 
             // The function keys scroll the same way, Fn (now Back) going along with them
@@ -525,6 +593,34 @@ final class DesktopTests: XCTestCase {
         hide.tap()
         _ = XCTWaiter.wait(for: [XCTNSPredicateExpectation(predicate: NSPredicate(format: "exists == false"), object: app.buttons["key.Esc"])],
                            timeout: 5)
+    }
+
+    /// Keys tapped fast, one tap after another: each tap goes out and shows its press, and
+    /// nothing of a key (a second title, glass past its edges) is drawn outside it at any frame.
+    func testRapidKeyTapsLeaveNoGhost() {
+        let tag = "\(appearance)-portrait-L-rapid-keys"
+        let (app, desktop) = connect(orientation: .portrait)
+        openKeyboard(app, tag: tag)
+        let count = state(desktop).count, grown = keyCount(desktop, "key growths")
+        for (id, taps) in [("key.Esc", 12), ("key.Tab", 8), ("key.Up", 8)] {
+            let f = app.buttons[id].frame
+            XCTAssertTrue(MultiTouch.timed((0..<taps).map { (CGPoint(x: f.midX, y: f.midY), .zero, Double($0) * 0.09, 0.04, 0) }, testCase: self))
+        }
+        shot("\(tag)-1-after-taps")
+        sleep(1)
+        let sent = events(desktop, since: count)
+        XCTAssertEqual(sent.filter { $0 == "key 0x1B" }.count, 12, "\(tag): Esc taps \(sent)")
+        XCTAssertEqual(sent.filter { $0 == "key 0x09" }.count, 8, "\(tag): Tab taps \(sent)")
+        XCTAssertGreaterThan(keyCount(desktop, "key growths"), grown, "\(tag): the taps showed no press")
+        XCTAssertEqual(keyCount(desktop, "key strays"), 0, "\(tag): something of a key was drawn outside it")
+        app.terminate()
+    }
+
+    /// A count in the desktop's state line ("<label> N").
+    private func keyCount(_ desktop: XCUIElement, _ label: String) -> Int {
+        let status = state(desktop).status
+        guard let range = status.range(of: label + #" ([0-9]+)"#, options: .regularExpression) else { return -1 }
+        return Int(status[range].replacingOccurrences(of: label + " ", with: "")) ?? -1
     }
 
     /// How many times a key in the row has lit up.

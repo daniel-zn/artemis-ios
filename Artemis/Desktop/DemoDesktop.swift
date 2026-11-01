@@ -33,6 +33,8 @@ final class DemoDesktopViewController: UIViewController {
         desktop = DesktopViewController(contentView: picture, streamSize: CGSize(width: 1920, height: 1080),
                                         input: input, title: appName, localCursor: true)
         picture.touchHandler = desktop.touchHandler
+        // Slow motion for the UI tests' pictures of a move (-ArtemisDemoSlowMotion YES)
+        if UserDefaults.standard.bool(forKey: "ArtemisDemoSlowMotion") { desktop.view.layer.speed = 0.1 }
         desktop.recordedEvents = { [weak self] in self?.input.events ?? [] }
         input.onChange = { [weak self] in self?.desktop.updateAccessibilityValue() }
         desktop.onDisconnect = { [weak self] in

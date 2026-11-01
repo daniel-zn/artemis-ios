@@ -4,7 +4,7 @@
 //
 //  The keys above the iOS keyboard (its input accessory): Esc, Tab, the sticky modifiers,
 //  arrows and editing keys, and a page of function keys. Fn, the page switch, is the first key
-//  and scrolls sideways with the others. A key lights up and fires only on a real tap: a finger
+//  and scrolls sideways with the others. A key lights up, grows and fires only on a real tap: a finger
 //  that lands on a key and swipes the row along scrolls it instead (the scroll view delays and
 //  cancels the key's touch, as UIKit's own scroll views do). The hide-keyboard button stays at
 //  the right end on its own glass; the keys scroll on underneath it, fading out as they go, and
@@ -24,6 +24,13 @@ final class KeyRowView: UIInputView {
     private(set) var highlightCount = 0
     private(set) var highlightedKey: String?
     var onHighlightChange: (() -> Void)?
+    /// For the UI tests (demo mode), sampled every frame: how many times a key grew (its press
+    /// showing) and how many times something of a key was drawn outside it (a second title, or
+    /// glass past its edges).
+    private(set) var growths = 0
+    private(set) var strays = 0
+    private var sampler: CADisplayLink?
+    private var grown: Set<String> = [], strayed: Set<String> = []
     /// The hide button's tap.
     var onHide: (() -> Void)?
 
@@ -62,25 +69,48 @@ final class KeyRowView: UIInputView {
 
     required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
 
+    override func didMoveToWindow() {
+        super.didMoveToWindow()
+        sampler?.invalidate()
+        sampler = nil
+        guard window != nil, DemoData.isEnabled else { return }
+        let link = CADisplayLink(target: self, selector: #selector(sample))
+        link.add(to: .main, forMode: .common)
+        sampler = link
+    }
+
+    @objc private func sample() {
+        for key in [pageButton] + keys {
+            let id = key.accessibilityIdentifier ?? ""
+            let sample = key.sampled()
+            if sample.scale > 1.02 { if grown.insert(id).inserted { growths += 1; onHighlightChange?() } } else { grown.remove(id) }
+            if sample.stray { if strayed.insert(id).inserted { strays += 1; onHighlightChange?() } } else { strayed.remove(id) }
+        }
+    }
+
     override func layoutSubviews() {
         super.layoutSubviews()
         let height = bounds.height
         let hideWidth = hideButton.intrinsicContentSize.width
-        hideButton.frame = CGRect(x: bounds.width - safeAreaInsets.right - 8 - hideWidth, y: (height - 38) / 2,
-                                  width: hideWidth, height: 38)
+        // Bounds and centre, not frames: a key is scaled up while it's pressed
+        let hideFrame = CGRect(x: bounds.width - safeAreaInsets.right - 8 - hideWidth, y: (height - 38) / 2,
+                               width: hideWidth, height: 38)
+        hideButton.bounds.size = hideFrame.size
+        hideButton.center = CGPoint(x: hideFrame.midX, y: hideFrame.midY)
         // The keys run the full width, under the hide button
         scrollView.frame = bounds
         // Fn, then the page's keys, side by side 6 pt apart
         var x: CGFloat = 8 + safeAreaInsets.left
         for key in [pageButton] + keys {
             let width = key.intrinsicContentSize.width
-            key.frame = CGRect(x: x, y: (height - 38) / 2, width: width, height: 38)
+            key.bounds.size = CGSize(width: width, height: 38)
+            key.center = CGPoint(x: x + width / 2, y: height / 2)
             x += width + 6
         }
         // Room at the end for the hide button, so the last key scrolls fully into view beside it
-        scrollView.contentSize = CGSize(width: x + (bounds.width - hideButton.frame.minX), height: height)
+        scrollView.contentSize = CGSize(width: x + (bounds.width - hideFrame.minX), height: height)
         // The keys fade out from just before the button to its middle
-        scrollView.fade = (hideButton.frame.minX - 10, hideButton.frame.midX)
+        scrollView.fade = (hideFrame.minX - 10, hideFrame.midX)
     }
 
     // MARK: Keys
@@ -220,6 +250,9 @@ private final class KeyScrollView: UIScrollView {
 }
 
 /// One key: Liquid Glass, tinted while its modifier is held, with a lock while it's locked.
+/// The glass isn't interactive: its own press effect reacts to any touch, a swipe of the row
+/// too, and leaves a ghost of the title when tapped fast. The key grows as it lights up
+/// instead, which the row's scroll view delays and cancels for a swipe.
 final class KeyButton: UIButton {
     var modifier: Modifier?
     var onHighlight: ((Bool) -> Void)?
@@ -229,10 +262,16 @@ final class KeyButton: UIButton {
     private let lock = UIImageView(image: UIImage(systemName: "lock.fill",
                                                   withConfiguration: UIImage.SymbolConfiguration(pointSize: 8, weight: .bold)))
     private let feedback = UISelectionFeedbackGenerator()
+    private let glass = UIVisualEffectView(effect: UIGlassEffect(style: .regular))
+    /// When it lit up: a quick tap still shows its press for a moment.
+    private var pressed = Date.distantPast
 
     init(identifier: String) {
         super.init(frame: .zero)
         accessibilityIdentifier = identifier
+        glass.isUserInteractionEnabled = false
+        glass.cornerConfiguration = .corners(radius: .fixed(10))
+        insertSubview(glass, at: 0)
         lock.tintColor = .white
         lock.isHidden = true
         addSubview(lock)
@@ -249,11 +288,17 @@ final class KeyButton: UIButton {
 
     override var isHighlighted: Bool {
         didSet {
-            if isHighlighted != oldValue { onHighlight?(isHighlighted) }
+            guard isHighlighted != oldValue else { return }
+            onHighlight?(isHighlighted)
+            let lit = isHighlighted
+            if lit { pressed = .now }
+            UIView.animate(springDuration: lit ? 0.25 : 0.35, bounce: lit ? 0 : 0.4, initialSpringVelocity: 0,
+                           delay: lit ? 0 : max(0, 0.12 + pressed.timeIntervalSinceNow),
+                           options: [.allowUserInteraction, .beginFromCurrentState]) {
+                self.transform = lit ? CGAffineTransform(scaleX: 1.15, y: 1.15) : .identity
+            }
         }
     }
-
-
 
     func setKey(title: String, accessibility: String) {
         guard self.title != title || symbol != nil else { return }
@@ -281,12 +326,12 @@ final class KeyButton: UIButton {
     }
 
     private func restyle() {
-        var configuration: UIButton.Configuration = modifierState == .off ? .glass() : .prominentGlass()
+        let effect = UIGlassEffect(style: .regular)
+        effect.tintColor = modifierState == .off ? nil : .tintColor
+        glass.effect = effect
+        var configuration = UIButton.Configuration.plain()
         configuration.baseForegroundColor = modifierState == .off ? .label : .white
-        if modifierState != .off { configuration.baseBackgroundColor = .tintColor }
         configuration.contentInsets = NSDirectionalEdgeInsets(top: 0, leading: 10, bottom: 0, trailing: 10)
-        configuration.cornerStyle = .fixed
-        configuration.background.cornerRadius = 10
         if let symbol {
             configuration.image = UIImage(systemName: symbol, withConfiguration: UIImage.SymbolConfiguration(pointSize: 16, weight: .semibold))
             configuration.title = nil
@@ -302,8 +347,32 @@ final class KeyButton: UIButton {
         invalidateIntrinsicContentSize()
     }
 
+    /// On screen now (presentation layers): how much it's scaled up, and whether anything of it
+    /// is drawn outside it (a second title or icon, or glass past its edges).
+    func sampled() -> (scale: CGFloat, stray: Bool) {
+        guard let me = layer.presentation() else { return (1, false) }
+        var labels = 0, stray = false
+        var scale = me.affineTransform().a
+        func visit(_ view: UIView) {
+            for sub in view.subviews where !sub.isHidden && sub !== lock {
+                guard let p = sub.layer.presentation(), p.opacity > 0.01 else { continue }
+                let frame = p.convert(p.bounds, to: me)
+                guard !frame.isEmpty else { continue }
+                if sub is UILabel || sub is UIImageView { labels += 1 } else if frame.width > 10 {
+                    scale = max(scale, me.affineTransform().a * frame.width / max(me.bounds.width, 1))
+                }
+                if !me.bounds.insetBy(dx: -1, dy: -1).contains(frame) { stray = true }
+                visit(sub)
+            }
+        }
+        visit(self)
+        return (scale, stray || labels > 1)
+    }
+
     override func layoutSubviews() {
         super.layoutSubviews()
+        glass.frame = bounds
+        sendSubviewToBack(glass)
         lock.frame = CGRect(x: bounds.width - 14, y: 4, width: 10, height: 10)
         bringSubviewToFront(lock)
     }

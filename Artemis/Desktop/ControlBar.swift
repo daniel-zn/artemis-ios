@@ -3,7 +3,7 @@
 //  Artemis
 //
 //  The connected screen's Liquid Glass controls: the control bar (floating and movable in
-//  landscape, foldable into a button; a row at the bottom when upright). The key row above
+//  landscape, foldable into a button; centred at the bottom when upright). The key row above
 //  the keyboard is in KeyRow.swift.
 //
 
@@ -28,37 +28,33 @@ struct ControlBar: View {
 
     // MARK: Layouts
 
-    /// Upright: a full-width row under the desktop, its buttons sharing the width.
+    /// Upright: the bar's icons alone, centred under the desktop.
     private var docked: some View {
-        GlassEffectContainer(spacing: 8) {
-            HStack(spacing: 4) {
-                buttons(wide: true)
-            }
-            .padding(.horizontal, 8)
-            .padding(.vertical, 6)
-            .frame(maxWidth: .infinity)
-            .glassEffect(.regular, in: .rect(cornerRadius: 26))
-        }
-        .padding(.horizontal, 10)
+        capsule { buttons() }
     }
 
-    /// Landscape: a capsule over the desktop, dragged by its grip.
+    /// Landscape: over the desktop, dragged by its grip.
     private var floating: some View {
-        GlassEffectContainer(spacing: 8) {
-            HStack(spacing: 2) {
-                grip
-                buttons(wide: false)
-                Button {
-                    session.actions.setBarExpanded(false)
-                } label: {
-                    BarIcon(symbol: "chevron.compact.right")
-                }
-                .accessibilityLabel("Fold Control Bar")
-                .accessibilityIdentifier("bar.fold")
+        capsule {
+            grip
+            buttons()
+            Button {
+                session.actions.setBarExpanded(false)
+            } label: {
+                BarIcon(symbol: "chevron.compact.right")
             }
-            .padding(.horizontal, 6)
-            .padding(.vertical, 4)
-            .glassEffect(.regular, in: .capsule)
+            .accessibilityLabel("Fold Control Bar")
+            .accessibilityIdentifier("bar.fold")
+        }
+    }
+
+    /// The glass capsule of icons, the same upright and in landscape.
+    private func capsule(@ViewBuilder _ content: () -> some View) -> some View {
+        GlassEffectContainer(spacing: 8) {
+            HStack(spacing: 2, content: content)
+                .padding(.horizontal, 6)
+                .padding(.vertical, 4)
+                .glassEffect(.regular, in: .capsule)
         }
         .buttonStyle(.plain)
     }
@@ -89,12 +85,12 @@ struct ControlBar: View {
     // MARK: Buttons
 
     @ViewBuilder
-    private func buttons(wide: Bool) -> some View {
+    private func buttons() -> some View {
         Button {
             session.actions.toggleKeyboard()
         } label: {
             BarIcon(symbol: session.keyboardShown ? "keyboard.chevron.compact.down" : "keyboard",
-                    active: session.keyboardShown, wide: wide)
+                    active: session.keyboardShown)
         }
         .accessibilityLabel(session.keyboardShown ? "Hide Keyboard" : "Keyboard")
         .accessibilityIdentifier("bar.keyboard")
@@ -102,8 +98,7 @@ struct ControlBar: View {
         Button {
             session.actions.setMode(session.mode == .trackpad ? .direct : .trackpad)
         } label: {
-            BarIcon(symbol: session.mode == .trackpad ? "rectangle.and.hand.point.up.left" : "hand.point.up.left",
-                    wide: wide)
+            BarIcon(symbol: session.mode == .trackpad ? "rectangle.and.hand.point.up.left" : "hand.point.up.left")
         }
         .accessibilityLabel(session.mode == .trackpad ? "Trackpad Mode" : "Direct Mode")
         .accessibilityHint("Switches between moving the pointer like a trackpad and touching the desktop directly")
@@ -113,7 +108,7 @@ struct ControlBar: View {
             session.actions.toggleGamepad()
         } label: {
             BarIcon(symbol: session.gamepadShown ? "gamecontroller.fill" : "gamecontroller",
-                    active: session.gamepadShown, wide: wide)
+                    active: session.gamepadShown)
         }
         .accessibilityLabel(session.gamepadShown ? "Hide Controller" : "Controller")
         .accessibilityHint("Shows a game controller on the screen; the PC sees it as an Xbox controller")
@@ -136,7 +131,7 @@ struct ControlBar: View {
             }
             Button("Type Clipboard", systemImage: "doc.on.clipboard.fill") { session.actions.typeClipboard() }
         } label: {
-            BarIcon(symbol: "command", wide: wide)
+            BarIcon(symbol: "command")
         }
         .menuOrder(.fixed)
         .accessibilityLabel("Shortcuts")
@@ -147,7 +142,7 @@ struct ControlBar: View {
             Button {
                 session.actions.resetZoom()
             } label: {
-                BarIcon(symbol: "arrow.down.right.and.arrow.up.left", wide: wide)
+                BarIcon(symbol: "arrow.down.right.and.arrow.up.left")
             }
             .accessibilityLabel("Reset Zoom")
             .accessibilityIdentifier("bar.resetZoom")
@@ -157,7 +152,7 @@ struct ControlBar: View {
         Button {
             session.actions.disconnect()
         } label: {
-            BarIcon(symbol: "xmark", tint: .red, wide: wide)
+            BarIcon(symbol: "xmark", tint: .red)
         }
         .accessibilityLabel("Disconnect")
         .accessibilityIdentifier("bar.disconnect")
@@ -229,15 +224,13 @@ private struct BarIcon: View {
     let symbol: String
     var active = false
     var tint: Color? = nil
-    /// Shares the row's width with the others (the upright bar).
-    var wide = false
 
     var body: some View {
         Image(systemName: symbol)
             .font(.system(size: 19, weight: .medium))
             .frame(height: 24)
             .foregroundStyle(tint ?? (active ? Color.accentColor : Color.primary))
-            .frame(minWidth: 44, maxWidth: wide ? .infinity : nil, minHeight: 44)
+            .frame(minWidth: 44, minHeight: 44)
             .contentShape(.rect)
     }
 }
