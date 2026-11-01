@@ -8,6 +8,7 @@
 
 #import "Connection.h"
 #import "Utils.h"
+#import "Moonlight-Swift.h"
 
 #import <VideoToolbox/VideoToolbox.h>
 
@@ -32,6 +33,8 @@
     // previous connection still stopping can't stop the new one's renderer or call into it.
     VideoDecoderRenderer* _myRenderer;
     id<ConnectionCallbacks> _myCallbacks;
+    // Artemis: this session sends the microphone (sound then runs in ArtemisSessionAudio)
+    BOOL _enableMic;
 }
 
 static NSLock* initLock;
@@ -44,6 +47,8 @@ static video_stats_t lastVideoStats;
 static NSLock* videoStatsLock;
 
 static SDL_AudioDeviceID audioDevice;
+// Artemis: the PC's audio goes to ArtemisSessionAudio's engine (a session with the microphone)
+static BOOL audioUsesEngine;
 static OPUS_MULTISTREAM_CONFIGURATION audioConfig;
 static void* audioBuffer;
 static int audioFrameSize;
@@ -212,11 +217,46 @@ int DrSubmitDecodeUnit(PDECODE_UNIT decodeUnit)
                              decodeUnit:decodeUnit];
 }
 
-int ArInit(int audioConfiguration, POPUS_MULTISTREAM_CONFIGURATION opusConfig, void* context, int flags)
+static int ArInitDecoder(POPUS_MULTISTREAM_CONFIGURATION opusConfig)
 {
     int err;
+    audioConfig = *opusConfig;
+    audioFrameSize = opusConfig->samplesPerFrame * sizeof(short) * opusConfig->channelCount;
+    audioBuffer = SDL_malloc(audioFrameSize);
+    if (audioBuffer == NULL) {
+        Log(LOG_E, @"Failed to allocate audio frame buffer");
+        return -1;
+    }
+    opusDecoder = opus_multistream_decoder_create(opusConfig->sampleRate,
+                                                  opusConfig->channelCount,
+                                                  opusConfig->streams,
+                                                  opusConfig->coupledStreams,
+                                                  opusConfig->mapping,
+                                                  &err);
+    if (opusDecoder == NULL) {
+        Log(LOG_E, @"Failed to create Opus decoder");
+        return -1;
+    }
+    return 0;
+}
+
+int ArInit(int audioConfiguration, POPUS_MULTISTREAM_CONFIGURATION opusConfig, void* context, int flags)
+{
     SDL_AudioSpec want, have;
     
+    // Artemis: with the microphone on, the PC's audio plays through the voice-processing
+    // engine, so the echo canceller knows what the speaker plays
+    audioUsesEngine = ArtemisSessionAudio.shared.playsGameAudio;
+    if (audioUsesEngine) {
+        if (ArInitDecoder(opusConfig) != 0 ||
+            ![ArtemisSessionAudio.shared startPlaybackWithSampleRate:opusConfig->sampleRate channels:opusConfig->channelCount]) {
+            Log(LOG_E, @"Failed to start session audio");
+            ArCleanup();
+            return -1;
+        }
+        return 0;
+    }
+
     if (SDL_InitSubSystem(SDL_INIT_AUDIO) < 0) {
         Log(LOG_E, @"Failed to initialize audio subsystem: %s\n", SDL_GetError());
         return -1;
@@ -235,23 +275,7 @@ int ArInit(int audioConfiguration, POPUS_MULTISTREAM_CONFIGURATION opusConfig, v
         return -1;
     }
     
-    audioConfig = *opusConfig;
-    audioFrameSize = opusConfig->samplesPerFrame * sizeof(short) * opusConfig->channelCount;
-    audioBuffer = SDL_malloc(audioFrameSize);
-    if (audioBuffer == NULL) {
-        Log(LOG_E, @"Failed to allocate audio frame buffer");
-        ArCleanup();
-        return -1;
-    }
-    
-    opusDecoder = opus_multistream_decoder_create(opusConfig->sampleRate,
-                                                  opusConfig->channelCount,
-                                                  opusConfig->streams,
-                                                  opusConfig->coupledStreams,
-                                                  opusConfig->mapping,
-                                                  &err);
-    if (opusDecoder == NULL) {
-        Log(LOG_E, @"Failed to create Opus decoder");
+    if (ArInitDecoder(opusConfig) != 0) {
         ArCleanup();
         return -1;
     }
@@ -267,6 +291,10 @@ int ArInit(int audioConfiguration, POPUS_MULTISTREAM_CONFIGURATION opusConfig, v
 
 void ArCleanup(void)
 {
+    if (audioUsesEngine) {
+        [ArtemisSessionAudio.shared stopPlayback];
+    }
+
     if (opusDecoder != NULL) {
         opus_multistream_decoder_destroy(opusDecoder);
         opusDecoder = NULL;
@@ -282,7 +310,10 @@ void ArCleanup(void)
         audioBuffer = NULL;
     }
     
-    SDL_QuitSubSystem(SDL_INIT_AUDIO);
+    if (!audioUsesEngine) {
+        SDL_QuitSubSystem(SDL_INIT_AUDIO);
+    }
+    audioUsesEngine = NO;
 }
 
 void ArDecodeAndPlaySample(char* sampleData, int sampleLength)
@@ -297,7 +328,10 @@ void ArDecodeAndPlaySample(char* sampleData, int sampleLength)
     
     decodeLen = opus_multistream_decode(opusDecoder, (unsigned char *)sampleData, sampleLength,
                                         (short*)audioBuffer, audioConfig.samplesPerFrame, 0);
-    if (decodeLen > 0) {
+    if (decodeLen > 0 && audioUsesEngine) {
+        [ArtemisSessionAudio.shared play:(const int16_t*)audioBuffer frames:decodeLen];
+    }
+    else if (decodeLen > 0) {
         // Provide backpressure on the queue to ensure too many frames don't build up
         // in SDL's audio queue.
         while (SDL_GetQueuedAudioSize(audioDevice) / audioFrameSize > 10) {
@@ -329,6 +363,7 @@ void ClStageFailed(int stage, int errorCode)
 
 void ClConnectionStarted(void)
 {
+    [ArtemisSessionAudio.shared connectionStarted];
     [_callbacks connectionStarted];
 }
 
@@ -389,10 +424,13 @@ void ClSetControllerLED(uint16_t controllerNumber, uint8_t r, uint8_t g, uint8_t
     // blocking on the caller's thread waiting to acquire initLock.
     dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_HIGH, 0), ^{
         [initLock lock];
+        // The microphone stops sending before its socket closes in LiStopConnection
+        [ArtemisSessionAudio.shared stopMicrophone];
         LiStopConnection();
         if (renderer == self->_myRenderer) {
             renderer = nil;
             _callbacks = nil;
+            [ArtemisSessionAudio.shared end];
         }
         [initLock unlock];
     });
@@ -451,6 +489,8 @@ void ClSetControllerLED(uint16_t controllerNumber, uint8_t r, uint8_t g, uint8_t
     _streamConfig.bitrate = config.bitRate;
     _streamConfig.supportedVideoFormats = config.supportedVideoFormats;
     _streamConfig.audioConfiguration = config.audioConfiguration;
+    _streamConfig.enableMic = config.enableMic;
+    _enableMic = config.enableMic;
     
     // Since we require iOS 12 or above, we're guaranteed to be running
     // on a 64-bit device with ARMv8 crypto instructions, so we don't
@@ -509,6 +549,8 @@ void ClSetControllerLED(uint16_t controllerNumber, uint8_t r, uint8_t g, uint8_t
     [initLock lock];
     renderer = _myRenderer;
     _callbacks = _myCallbacks;
+    // The audio session is set before connecting: changing it mid-stream reroutes the sound
+    [ArtemisSessionAudio.shared prepareWithMicrophone:_enableMic];
     LiStartConnection(&_serverInfo,
                       &_streamConfig,
                       &_clCallbacks,

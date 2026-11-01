@@ -40,6 +40,8 @@ final class DemoDesktopViewController: UIViewController {
         desktop.onDisconnect = { [weak self] in
             guard let self else { return }
             self.controllerScript?.stop()
+            self.microphoneTimer?.invalidate()
+            if self.startedMicrophone { SessionAudio.shared.end() }
             let onExit = self.onExit
             self.presentingViewController?.dismiss(animated: true) { onExit() }
         }
@@ -57,12 +59,23 @@ final class DemoDesktopViewController: UIViewController {
     }
 
     private var ranGamepadScript = false
+    /// The microphone's demo session (on in Settings, with -ArtemisTestMicTone YES): the test
+    /// tone encoded as in a session; the state line counts its packets.
+    private var startedMicrophone = false
+    private var microphoneTimer: Timer?
     private var controllerScript: DemoControllerScript?
 
     override func viewDidAppear(_ animated: Bool) {
         super.viewDidAppear(animated)
         setNeedsUpdateOfScreenEdgesDeferringSystemGestures()
         setNeedsUpdateOfHomeIndicatorAutoHidden()
+        if !startedMicrophone, MicSettings.current.enabled, SessionAudio.usesTestTone {
+            startedMicrophone = true
+            SessionAudio.shared.startDemoSession()
+            microphoneTimer = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: true) { [weak self] _ in
+                self?.desktop.updateAccessibilityValue()
+            }
+        }
         // The clipboard for Type Clipboard in the UI tests (-ArtemisDemoClipboard "<text>"): the test
         // runner, in the background, can't write it
         if let text = UserDefaults.standard.string(forKey: "ArtemisDemoClipboard") {

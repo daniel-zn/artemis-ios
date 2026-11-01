@@ -58,6 +58,8 @@
 	<array>
 		<string>_nvstream._tcp</string>
 	</array>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>Artemis sends your voice to your PC during a session when you turn on the microphone.</string>
 	<key>NSLocalNetworkUsageDescription</key>
 	<string>Artemis uses the local network to find and connect to your PCs.</string>
 	<key>UIApplicationSceneManifest</key>

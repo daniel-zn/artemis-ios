@@ -14,6 +14,15 @@
       "timeout": 10
     },
     {
+      "name": "audio",
+      "run": "swift test --package-path ArtemisAudio",
+      "inputs": [
+        "ArtemisAudio"
+      ],
+      "line": "build",
+      "timeout": 10
+    },
+    {
       "name": "touch",
       "run": "Scripts/touch-tests.sh",
       "inputs": [
@@ -47,6 +56,20 @@
           "ScreenshotTests/testEveryScreenUprightDefaultText"
         ],
         "rules": [
+          {
+            "paths": [
+              "Artemis/Audio/**",
+              "Artemis/Views/MicrophoneSettings.swift",
+              "ArtemisAudio/**",
+              "Limelight/Stream/Connection.m",
+              "moonlight-common/**",
+              "ArtemisUITests/MicrophoneTests.swift"
+            ],
+            "tests": [
+              "MicrophoneTests",
+              "ScreenshotTests/testStreamStartsAndReturns"
+            ]
+          },
           {
             "paths": [
               "Artemis/Desktop/OnScreenGamepad.swift",
@@ -122,7 +145,8 @@
           {
             "paths": [
               "ArtemisUITests/LiveHostTests.swift",
-              "Artemis/Fonts/OFL.txt"
+              "Artemis/Fonts/OFL.txt",
+              "ArtemisUITests/LiveMicTests.swift"
             ],
             "tests": []
           }

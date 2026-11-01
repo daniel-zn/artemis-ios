@@ -103,6 +103,12 @@
 			path = Artemis;
 			sourceTree = "<group>";
 		};
+		A7E0000000000000000000A3 /* ArtemisAudio */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			name = ArtemisAudio;
+			path = ArtemisAudio/Sources/ArtemisAudio;
+			sourceTree = "<group>";
+		};
 		A7E0000000000000000000A2 /* ArtemisUITests */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			path = ArtemisUITests;
@@ -288,6 +294,7 @@
 			isa = PBXGroup;
 			children = (
 				A7E0000000000000000000A1 /* Artemis */,
+				A7E0000000000000000000A3 /* ArtemisAudio */,
 				A7E0000000000000000000A2 /* ArtemisUITests */,
 				9896219423D15C2900211983 /* X1Kit */,
 				98AB2E7F1CAD46830089BB98 /* moonlight-common.xcodeproj */,
@@ -571,6 +578,7 @@
 			);
 			fileSystemSynchronizedGroups = (
 				A7E0000000000000000000A1 /* Artemis */,
+				A7E0000000000000000000A3 /* ArtemisAudio */,
 			);
 			name = Moonlight;
 			packageProductDependencies = (

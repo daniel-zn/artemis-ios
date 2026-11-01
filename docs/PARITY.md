@@ -63,7 +63,7 @@ desktop (apps rather than games, a session rather than a stream). Checked agains
 | Audio › Audio configuration (stereo, 5.1, 7.1) | ➖ stereo: the iPhone and AirPods play stereo; upstream iOS only offers surround on Apple TV | ➖ |
 | Audio › Mute host PC speakers | "Mute the PC's speakers during a session" | ✅ |
 | Audio › Mute when not the active window | ➖ an iPhone session is always the active app | ➖ |
-| Audio › Microphone streaming, device, noise suppression, test | Placeholder: "Enable microphone streaming" (off, "coming later") | 🔜 mic passthrough to Apollo |
+| Audio › Microphone streaming, device, noise suppression, test | Enable microphone streaming (off by default), Input (iPhone / Headset / Bluetooth Microphone), Test microphone with a level meter; noise suppression is Apple's voice processing, always on (echo cancellation too) instead of a switch; a denied permission is one line with Open Settings, no alert | ✅ (noise suppression: no switch) |
 | Keyboard & Mouse › Optimize mouse for remote desktop | ➖ always: Artemis sends absolute positions (remote desktop mode) | ✅ (built in) |
 | Keyboard & Mouse › Capture system shortcuts | ➖ iOS doesn't let apps capture system shortcuts; the key row sends Win, Alt+Tab etc. | ➖ |
 | Keyboard & Mouse › Touchscreen as a virtual trackpad | Touch & Pointer › Trackpad / Direct, pointer speed, natural scrolling, control bar | ✅ |
@@ -113,4 +113,4 @@ desktop (apps rather than games, a session rather than a stream). Checked agains
 | Start+Select+L1+R1 disconnects | Same | ✅ |
 | Select+L1+R1+X stats overlay | ➖ not in upstream iOS (setting in Video & Display) | ➖ |
 | The app's own screens by controller | ➖ Mac: SDL gamepad navigation | ➖ not done: SwiftUI focus on iPhone isn't moved by a controller (iPad's focus system follows a keyboard, Apple TV's the remote); not verified on a device |
-| Microphone | 🔜 | 🔜 |
+| Microphone | To Apollo (its v2 microphone protocol), 48 kHz mono Opus, 20 ms frames sent as captured | Same; the PC's audio plays through the same voice-processing engine so the iPhone's speaker isn't heard back; a microphone button in the control bar mutes it | ✅ (+ mute) |

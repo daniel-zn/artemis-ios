@@ -196,6 +196,8 @@ final class DesktopViewController: UIViewController {
         view.addSubview(toastBackground)
 
         let center = NotificationCenter.default
+        center.addObserver(self, selector: #selector(microphoneChanged), name: .artemisMicrophoneChanged, object: nil)
+        microphoneChanged()
         center.addObserver(self, selector: #selector(keyboardChanged), name: UIResponder.keyboardDidHideNotification, object: nil)
         center.addObserver(self, selector: #selector(keyboardChanged), name: UIResponder.keyboardDidShowNotification, object: nil)
         updateAccessibilityValue()
@@ -605,6 +607,10 @@ final class DesktopViewController: UIViewController {
             self.setGamepad(!self.session.gamepadShown)
             self.haptic(.light)
         }
+        actions.toggleMicrophoneMute = { [weak self] in
+            SessionAudio.shared.muted.toggle()
+            self?.haptic(.light)
+        }
         actions.resetZoom = { [weak self] in self?.resetZoomAnimated() }
         actions.shortcut = { [weak self] shortcut in
             self?.input.keyStroke(shortcut.keyCode, modifiers: shortcut.flags, nonNormalized: false)
@@ -670,6 +676,16 @@ final class DesktopViewController: UIViewController {
 
     // MARK: UI tests
 
+    /// The session's microphone started, stopped or was muted (SessionAudio).
+    @objc private func microphoneChanged() {
+        let audio = SessionAudio.shared
+        guard session.microphoneOn != audio.isSending || session.microphoneMuted != audio.muted else { return }
+        session.microphoneOn = audio.isSending
+        session.microphoneMuted = audio.muted
+        relayoutBar()
+        updateAccessibilityValue()
+    }
+
     func updateAccessibilityValue() {
         var lines = [String(format: "zoom %.2f · %@ · keyboard %@ · bar %@ · gamepad mouse %@", scale, session.mode.rawValue,
                             session.keyboardShown ? "on" : "off", session.barExpanded ? "open" : "folded",
@@ -688,6 +704,9 @@ final class DesktopViewController: UIViewController {
         let bar = barPlacement.frame
         lines[0] += String(format: " · bar frame %.1f %.1f %.1f %.1f · screen %.1f %.1f", bar.minX, bar.minY, bar.width, bar.height,
                            view.bounds.width, view.bounds.height)
+        let packets = SessionAudio.shared.packetStats
+        lines[0] += " · microphone " + (session.microphoneOn ? (session.microphoneMuted ? "muted" : "on") : "off")
+            + " · mic packets \(packets.encoded) of \(packets.samples) samples"
         if let keyRow {
             lines[0] += " · key highlights \(keyRow.highlightCount) · key down \(keyRow.highlightedKey ?? "none")"
             lines[0] += " · key growths \(keyRow.growths) · key strays \(keyRow.strays)"

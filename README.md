@@ -59,7 +59,11 @@ Changes from upstream so far:
   binary, download its zip once into `~/Library/Caches/org.swift.swiftpm/artifacts/` under the URL-derived name
   SwiftPM uses (`https___github_com_krzyzanowskim_OpenSSL_releases_download_<version>_OpenSSL_xcframework_zip`).
 
-Planned: microphone passthrough to Apollo (as in the macOS client).
+Microphone passthrough to Apollo (as in the macOS client): Settings › Audio & Microphone › Enable microphone
+streaming. With it on, the PC's audio and the microphone run through one AVAudioEngine with Apple's voice processing
+(echo cancellation, noise suppression), the microphone goes out as 48 kHz mono Opus in 20 ms frames, and the control
+bar has a mute button. The audio core (`ArtemisAudio/`) is a Swift package the app compiles too:
+`swift test --package-path ArtemisAudio`.
 
 ## Waking a PC
 

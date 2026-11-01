@@ -18,6 +18,7 @@
 #import "ControllerSupport.h"
 #import "Connection.h"
 #import "StreamFrameViewController.h"
+#import "Moonlight-Swift.h"
 
 #import <AVFoundation/AVFoundation.h>
 #import <VideoToolbox/VideoToolbox.h>
@@ -265,6 +266,12 @@
     Log(LOG_I, @"Audio device supports %d channels", physicalOutputChannels);
 
     int numberOfChannels = MIN([streamSettings.audioConfig intValue], physicalOutputChannels);
+    // The microphone's voice processing plays stereo at most
+    streamConfig.enableMic = ArtemisSessionAudio.microphoneWanted;
+    if (streamConfig.enableMic) {
+        numberOfChannels = MIN(numberOfChannels, 2);
+        Log(LOG_I, @"Microphone streaming on for this session");
+    }
     Log(LOG_I, @"Selected number of audio channels %d", numberOfChannels);
     if (numberOfChannels >= 8) {
         streamConfig.audioConfiguration = AUDIO_CONFIGURATION_71_SURROUND;

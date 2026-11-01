@@ -184,6 +184,19 @@ private struct BarButtons: View {
         .accessibilityHint("Shows a game controller on the screen; the PC sees it as an Xbox controller")
         .accessibilityIdentifier("bar.gamepad")
 
+        // Only in a session sending the microphone; muted is struck through and red
+        if session.microphoneOn {
+            Button {
+                session.actions.toggleMicrophoneMute()
+            } label: {
+                BarIcon(symbol: session.microphoneMuted ? "mic.slash.fill" : "mic.fill",
+                        tint: session.microphoneMuted ? .red : nil)
+            }
+            .accessibilityLabel(session.microphoneMuted ? "Unmute Microphone" : "Mute Microphone")
+            .accessibilityValue(session.microphoneMuted ? "Muted" : "On")
+            .accessibilityIdentifier("bar.microphone")
+        }
+
         Menu {
             // The everyday ones first; the rest in submenus, so the menu fits in landscape
             ForEach(Shortcut.common) { shortcut in

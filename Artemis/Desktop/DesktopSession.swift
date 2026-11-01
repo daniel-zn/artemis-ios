@@ -30,6 +30,9 @@ final class DesktopSession {
     var isPortrait = false
     /// The on-screen controller is up (each session starts without it).
     var gamepadShown = false
+    /// The microphone goes to the PC in this session (the bar shows its button), and is muted.
+    var microphoneOn = false
+    var microphoneMuted = false
     var keyPage = KeyPage.main
     var modifiers: [Modifier: ModifierState] = [:]
 
@@ -40,6 +43,7 @@ final class DesktopSession {
         var toggleKeyboard: () -> Void = {}
         var setMode: (PointerMode) -> Void = { _ in }
         var toggleGamepad: () -> Void = {}
+        var toggleMicrophoneMute: () -> Void = {}
         var resetZoom: () -> Void = {}
         var shortcut: (Shortcut) -> Void = { _ in }
         var typeClipboard: () -> Void = {}

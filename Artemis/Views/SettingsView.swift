@@ -305,15 +305,7 @@ struct SettingsPage: View {
         } footer: {
             Note("The PC's audio plays on this iPhone. Turn this off to hear it on the PC too.")
         }
-        Section {
-            Toggle("Enable microphone streaming", isOn: .constant(false))
-                .disabled(true)
-                .accessibilityIdentifier("settings.microphone")
-        } header: {
-            Note("Microphone")
-        } footer: {
-            Note("Coming later: sending this iPhone's microphone to the PC through Apollo, as the Mac app does.")
-        }
+        MicrophoneSettings()
     }
 
     @ViewBuilder

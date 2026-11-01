@@ -645,6 +645,12 @@ final class ComputerStore {
 
     /// Launches a game, or resumes it when it's the one running.
     func play(_ game: Game) {
+        // The microphone is on but nobody has decided about it yet (permission reset in iOS
+        // Settings, say): iOS asks once, before connecting. Denied: the session goes without it.
+        if MicSettings.current.enabled, !SessionAudio.usesTestTone, MicPermissionGate.shared.wouldAsk {
+            MicPermissionGate.shared.ensureAccess { [weak self] _ in self?.play(game) }
+            return
+        }
         guard let app = app(game) else { return }
         streamingHostID = game.hostID
         assetManager?.stopRetrieving()

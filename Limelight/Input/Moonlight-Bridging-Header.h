@@ -22,4 +22,5 @@
 #import "KeyboardSupport.h"
 #import "GamepadFilter.h"
 #import "ControllerSupport.h"
+#import "../../Artemis/Audio/MicrophoneEncoder.h"
 #include <Limelight.h>

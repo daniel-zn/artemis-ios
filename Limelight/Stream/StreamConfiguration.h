@@ -31,5 +31,7 @@
 @property BOOL multiController;
 @property BOOL useFramePacing;
 @property NSData* serverCert;
+// Artemis: send the microphone to the PC (Apollo's microphone passthrough)
+@property BOOL enableMic;
 
 @end

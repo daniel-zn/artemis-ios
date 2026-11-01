@@ -56,8 +56,8 @@ indicator (`DesktopTests/testUprightBarSpacedLikeLandscape`).
 - Icons only, no captions (VoiceOver reads each button's name; each is at least 44 points;
   `DesktopTests/testBarShowsIconsOnly`): keyboard, pointer mode (trackpad / direct), controller (shows or hides the on-screen controller), shortcuts, zoom
   reset (while zoomed), disconnect (one tap ends the session, no confirming menu). There's no right-click
-  button: a two-finger tap or a press and hold right-clicks. Room is left for a microphone button (mic passthrough
-  is a later phase).
+  button: a two-finger tap or a press and hold right-clicks. With the microphone on (Settings › Audio &
+  Microphone) and the PC taking it, a microphone button mutes and unmutes it (struck through and red when muted).
 - In landscape it can be dragged anywhere on the screen, up to 12 points from each edge (clear of the rounded
   corners), except beside the camera (the Dynamic Island or notch, on one side halfway up), where it stops at the
   safe area; it remembers where, keeps that after a rotation (turned over, the camera's side changes and the bar
