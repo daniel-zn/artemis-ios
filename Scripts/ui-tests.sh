@@ -46,6 +46,8 @@ DD="${DERIVED_DATA:-$OUT/dd}"
 rm -rf "$OUT/shots" && mkdir -p "$OUT/shots"
 xcrun simctl boot "$SIM" 2>/dev/null || true
 xcrun simctl bootstatus "$SIM" -b >/dev/null
+# A new or erased Simulator shows the keyboard's one-time "slide to type" intro over the key row
+xcrun simctl spawn "$SIM" defaults write com.apple.keyboard.preferences DidShowContinuousPathIntroduction -bool true
 # A help link opened in an earlier run would leave a "◀ Safari" in the status bar
 xcrun simctl terminate "$SIM" com.apple.mobilesafari 2>/dev/null || true
 

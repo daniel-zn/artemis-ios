@@ -584,6 +584,12 @@ final class DesktopTests: XCTestCase {
         }
         XCTAssertTrue(app.buttons["key.Esc"].waitForExistence(timeout: 5), "\(tag): the keyboard didn't open")
         sleep(1)
+        // The keyboard's one-time "slide to type" intro, if a fresh Simulator shows it anyway
+        let intro = app.buttons["Continue"]
+        if intro.exists {
+            intro.tap()
+            sleep(1)
+        }
     }
 
     /// Closes the keyboard with the key row's hide button.
