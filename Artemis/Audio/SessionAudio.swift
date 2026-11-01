@@ -65,7 +65,6 @@ final class SessionAudio: NSObject, @unchecked Sendable {
     private var encoderThread: Thread?
     private var encoderDone: DispatchSemaphore?
     private var observers: [NSObjectProtocol] = []
-    private var interrupted = false
 
     // Between threads
     /// The PC's audio, interleaved, from the decoder to the render thread (0.5 s at most).
@@ -76,6 +75,8 @@ final class SessionAudio: NSObject, @unchecked Sendable {
     private let captureSignal = DispatchSemaphore(value: 0)
     private let stopEncoder = Atomic<Bool>(false)
     private let sendingFlag = Atomic<Bool>(false)
+    /// The microphone (or the test tone) is being captured and encoded right now.
+    private let capturing = Atomic<Bool>(false)
     private let mutedFlag = Atomic<Bool>(false)
     /// Held while a packet is being sent: stopMicrophone() waits it out.
     private let sendLock = NSLock()
@@ -109,6 +110,7 @@ final class SessionAudio: NSObject, @unchecked Sendable {
             playback = (Double(sampleRate), Int(channels))
             gameChannels.store(Int(channels), ordering: .releasing)
             gameRing.clear()
+            recovery.setWanted(true)
             return startEngine()
         }
     }
@@ -123,6 +125,7 @@ final class SessionAudio: NSObject, @unchecked Sendable {
     /// ArCleanup.
     @objc func stopPlayback() {
         queue.sync {
+            recovery.setWanted(false)
             playback = nil
             stopEngine()
         }
@@ -137,7 +140,9 @@ final class SessionAudio: NSObject, @unchecked Sendable {
         }
         mutedFlag.store(false, ordering: .releasing)
         sendingFlag.store(true, ordering: .releasing)
-        logInfo("Microphone capture streaming started; negotiated mic stream is active")
+        logInfo(capturing.load(ordering: .acquiring)
+            ? "Microphone capture streaming started; negotiated mic stream is active"
+            : "Negotiated mic stream is active, but no microphone input is open; it's sent once one opens")
         notifyChanged()
     }
 
@@ -160,8 +165,9 @@ final class SessionAudio: NSObject, @unchecked Sendable {
 
     // MARK: The control bar
 
-    /// The microphone is going to the PC in this session.
-    var isSending: Bool { sendingFlag.load(ordering: .acquiring) }
+    /// The microphone is going to the PC in this session: negotiated and actually captured (an
+    /// input that couldn't be opened, or lost in a rebuild, isn't shown as an active microphone).
+    var isSending: Bool { sendingFlag.load(ordering: .acquiring) && capturing.load(ordering: .acquiring) }
 
     /// Muted: nothing is sent (the microphone stays open, so unmuting is instant).
     var muted: Bool {
@@ -183,6 +189,7 @@ final class SessionAudio: NSObject, @unchecked Sendable {
             self.wantsCapture = Self.usesTestTone ? .tone : .microphone
             self.input = input
             self.configureSession()
+            self.recovery.setWanted(true)
             let started = self.startEngine()
             let listening = started ? self.listening : nil
             if !started { self.teardown() }
@@ -203,7 +210,8 @@ final class SessionAudio: NSObject, @unchecked Sendable {
         queue.sync {
             teardown()
             wantsCapture = .tone
-            _ = startEngine(sendsToHost: false)
+            recovery.setWanted(true)
+            startEngine(sendsToHost: false)
         }
         mutedFlag.store(false, ordering: .releasing)
         sendingFlag.store(true, ordering: .releasing)
@@ -283,43 +291,61 @@ final class SessionAudio: NSObject, @unchecked Sendable {
         observers.append(center.addObserver(forName: AVAudioSession.routeChangeNotification, object: session, queue: nil) { [weak self] note in
             let reason = (note.userInfo?[AVAudioSessionRouteChangeReasonKey] as? UInt).flatMap { AVAudioSession.RouteChangeReason(rawValue: $0) }
             guard reason == .newDeviceAvailable || reason == .oldDeviceUnavailable else { return }
-            // A headset came or went: keep the chosen microphone (or the iPhone's)
-            self?.queue.async { if self?.sessionActive == true { self?.applyPreferredInput() } }
+            self?.queue.async {
+                guard let self else { return }
+                // A headset came or went: keep the chosen microphone (or the iPhone's), and
+                // try again now if the sound is off after a failure
+                if self.sessionActive { self.applyPreferredInput() }
+                self.carryOut(self.recovery.routeChanged(), reason: "a headset came or went")
+            }
         })
         observers.append(center.addObserver(forName: AVAudioSession.mediaServicesWereResetNotification, object: session, queue: nil) { [weak self] _ in
-            self?.queue.async { self?.restart(reason: "media services were reset") }
+            self?.queue.async {
+                guard let self else { return }
+                // Every audio object is gone, the session's setup with them
+                self.sessionActive = false
+                self.carryOut(self.recovery.mediaServicesReset(), reason: "media services were reset")
+            }
         })
     }
 
-    /// A call or Siri took the audio: the engine stopped. Afterwards it starts again.
+    /// A call or Siri took the audio (the system stopped the engine); afterwards it comes back.
     private func interruption(began: Bool) {
-        guard engine != nil || interrupted else { return }
         if began {
-            logInfo("Audio interrupted (a call or Siri); the microphone pauses")
-            interrupted = true
+            guard recovery.wanted else { return }
+            logInfo("Audio interrupted (a call or Siri); the sound and microphone pause")
+            recovery.interruptionBegan()
             return
         }
-        interrupted = false
-        do {
-            try AVAudioSession.sharedInstance().setActive(true)
-        } catch {
-            logInfo("Couldn't take the audio back after an interruption: \(error.localizedDescription)")
-        }
-        restart(reason: "the interruption ended")
+        carryOut(recovery.interruptionEnded(), reason: "the interruption ended")
     }
 
-    /// The input or output changed under the engine (AVAudioEngineConfigurationChange): build it again.
-    private func restart(reason: String) {
-        guard engine != nil else { return }
-        logInfo("Restarting session audio: \(reason)")
-        let sends = encoderSendsToHost
-        stopEngine()
-        _ = startEngine(sendsToHost: sends)
+    /// Does what AudioRecovery decided.
+    private func carryOut(_ action: AudioRecovery.Action, reason: String) {
+        switch action {
+        case .none:
+            break
+        case .rebuild:
+            logInfo("Rebuilding session audio: \(reason)")
+            startEngine(sendsToHost: encoderSendsToHost)
+        case .restoreSessionAndRebuild:
+            logInfo("Restoring the audio session and rebuilding: \(reason)")
+            sessionActive = false
+            configureSession()
+            startEngine(sendsToHost: encoderSendsToHost)
+        case .retry(let delay, let token):
+            logInfo(String(format: "Session audio is off (%@); trying again in %.0f s", reason, delay))
+            queue.asyncAfter(deadline: .now() + delay) { [weak self] in
+                guard let self else { return }
+                self.carryOut(self.recovery.retryFired(token: token), reason: "retry")
+            }
+        }
     }
 
     // MARK: Engine
 
     private var encoderSendsToHost = true
+    private var recovery = AudioRecovery()
     private var configurationObserver: NSObjectProtocol?
 
     @discardableResult
@@ -368,11 +394,17 @@ final class SessionAudio: NSObject, @unchecked Sendable {
             try engine.start()
         } catch {
             logInfo("Couldn't start session audio: \(error.localizedDescription)")
+            carryOut(recovery.startFailed(at: Date()), reason: "the engine didn't start")
             return false
         }
         self.engine = engine
+        // Changes posted by this engine carry its generation: once it's replaced they're ignored
+        let generation = recovery.started(at: Date())
         configurationObserver = NotificationCenter.default.addObserver(forName: .AVAudioEngineConfigurationChange, object: engine, queue: nil) { [weak self] _ in
-            self?.queue.async { self?.restart(reason: "the audio route changed") }
+            self?.queue.async {
+                guard let self else { return }
+                self.carryOut(self.recovery.configurationChanged(engineGeneration: generation, at: Date()), reason: "the audio route changed")
+            }
         }
 
         switch wantsCapture {
@@ -403,6 +435,7 @@ final class SessionAudio: NSObject, @unchecked Sendable {
             if wantsCapture == .microphone {
                 try? engine.inputNode.setVoiceProcessingEnabled(false)
             }
+            recovery.stopped()
         }
         engine = nil
         stopEncoderThread()
@@ -410,9 +443,9 @@ final class SessionAudio: NSObject, @unchecked Sendable {
 
     /// Everything off; the audio session handed back to other apps.
     private func teardown() {
+        recovery.setWanted(false)
         stopEngine()
         playback = nil
-        interrupted = false
         observers.forEach { NotificationCenter.default.removeObserver($0) }
         observers = []
         if sessionActive {
@@ -450,7 +483,6 @@ final class SessionAudio: NSObject, @unchecked Sendable {
     /// or the channels' average.
     private func makeSink(channels: Int, firstOnly: Bool) -> AVAudioSinkNode {
         let ring = captureRing
-        let signal = captureSignal
         let scratch = Scratch<Float>(count: 8192)
         // The shared instance lives as long as the app: the block holds it without a count
         return AVAudioSinkNode { [unowned self] _, frameCount, audioBufferList -> OSStatus in
@@ -466,9 +498,10 @@ final class SessionAudio: NSObject, @unchecked Sendable {
                 }
                 scratch.pointer[i] = sum * scale
             }
+            // Only a copy and an atomic here: no wake-up call (a semaphore can enter the kernel);
+            // the encoder looks every 5 ms
             ring.write(UnsafeBufferPointer(start: scratch.pointer, count: frames))
             self.captureCallbacks.add(1, ordering: .relaxed)
-            signal.signal()
             return noErr
         }
     }
@@ -516,10 +549,14 @@ final class SessionAudio: NSObject, @unchecked Sendable {
         encoderThread = thread
         encoderDone = done
         thread.start()
+        capturing.store(true, ordering: .releasing)
+        notifyChanged()
     }
 
     private func stopEncoderThread() {
         guard encoderThread != nil else { return }
+        capturing.store(false, ordering: .releasing)
+        notifyChanged()
         stopEncoder.store(true, ordering: .releasing)
         captureSignal.signal()
         encoderDone?.wait()
@@ -531,7 +568,8 @@ final class SessionAudio: NSObject, @unchecked Sendable {
         let format = AVAudioFormat(standardFormatWithSampleRate: inputRate, channels: 1)!
         let chunk = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: 2048)!
         while !stopEncoder.load(ordering: .acquiring) {
-            _ = captureSignal.wait(timeout: .now() + .milliseconds(100))
+            // Woken by the test tone or stopEncoderThread(); the microphone's sink never signals
+            _ = captureSignal.wait(timeout: .now() + .milliseconds(5))
             while !stopEncoder.load(ordering: .acquiring) {
                 let read = captureRing.read(into: UnsafeMutableBufferPointer(start: chunk.floatChannelData![0], count: 2048))
                 guard read > 0 else { break }
