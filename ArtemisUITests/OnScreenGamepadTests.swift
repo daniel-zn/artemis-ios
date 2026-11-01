@@ -351,6 +351,8 @@ final class OnScreenGamepadTests: XCTestCase {
         XCTAssertEqual(folded.value as? String ?? "", "", "\(tag): a touch didn't bring the glass back")
         let after = barState(desktop).bar
         XCTAssertLessThan(after.midX, before.midX - 80, "\(tag): the faded bar didn't move with the drag (\(before) → \(after))")
+        // And VoiceOver finds it where it went
+        checkBarAccessibility(desktop, bar: after, "\(tag) moved faded")
         sleep(7)
         XCTAssertEqual(folded.value as? String, "Faded", "\(tag): didn't fade again")
         // Faded, a tap still unfolds the bar
@@ -361,6 +363,87 @@ final class OnScreenGamepadTests: XCTestCase {
         XCTAssertEqual(folded.value as? String ?? "", "", "\(tag): folded again, it's still faded")
         app.terminate()
         XCUIDevice.shared.orientation = .portrait
+    }
+
+    /// Landscape, in slow motion: folding the bar shrinks its glass capsule into the round button
+    /// and unfolding grows it back out: one piece of glass whose size goes through the sizes in
+    /// between, never a capsule and a circle swapped. Also when a tap wakes the faded button and
+    /// unfolds it in one go.
+    func testBarFoldMorphs() {
+        let tag = "\(appearance)-landscape-bar-morph"
+        let (app, _) = connect(orientation: .landscapeLeft, extra: ["-ArtemisDemoSlowMotion", "YES", "-ArtemisDemoGlassProbe", "YES"])
+        // Every frame of it inside the screen's edges, as the bar
+        let inside = app.windows.firstMatch.frame.insetBy(dx: barEdgeMargin - 1, dy: barEdgeMargin - 1)
+        let probe = control(app, "demo.glass")
+        XCTAssertTrue(probe.waitForExistence(timeout: 5), "\(tag): no glass probe")
+        var log: [String] = []
+        /// The pieces of glass on the screen now.
+        func glass() -> [CGRect] {
+            (probe.value as? String ?? "").split(separator: "\n").compactMap { line in
+                let n = line.split(separator: " ").compactMap { Double($0) }
+                return n.count == 4 ? CGRect(x: n[0], y: n[1], width: n[2], height: n[3]) : nil
+            }
+        }
+        let capsule = glass()
+        XCTAssertEqual(capsule.count, 1, "\(tag): open, the glass is \(capsule)")
+        let wide = capsule.first?.width ?? 0
+        XCTAssertGreaterThan(wide, 200, "\(tag): open, the glass is \(capsule)")
+        func tapNow(_ id: String) {
+            // (tap() would wait for the animation to end)
+            let frame = control(app, id).frame
+            XCTAssertTrue(MultiTouch.timed([(CGPoint(x: frame.midX, y: frame.midY), .zero, 0, 0.05, 0)], testCase: self), "\(tag): no tap")
+        }
+        /// Follows the glass after a tap until it settles at `width`: the sizes it went through.
+        func follow(_ name: String, to width: CGFloat) {
+            var widths: [CGFloat] = [], swapped: [CGRect] = []
+            var shots = 0
+            let start = Date()
+            var settled = 0
+            while Date().timeIntervalSince(start) < 12 && settled < 5 {
+                let now = glass()
+                log.append(String(format: "%@ %.2f: ", name, Date().timeIntervalSince(start)) + now.map { "\($0)" }.joined(separator: ", "))
+                if now.count == 1, let piece = now.first {
+                    widths.append(piece.width)
+                    XCTAssertTrue(inside.contains(piece), "\(tag) \(name): the glass at \(piece) goes past the screen's edges \(inside)")
+                    settled = abs(piece.width - width) < 1 ? settled + 1 : 0
+                    // Mid-way (the glass between the two sizes): pictures for the record
+                    if shots < 2, piece.width > 52 + 30, piece.width < wide - 30 {
+                        shot("\(tag)-\(name)-mid-\(shots)")
+                        shots += 1
+                    }
+                } else if now.count > 1, swapped.isEmpty {
+                    swapped = now
+                }
+            }
+            XCTAssertTrue(swapped.isEmpty, "\(tag) \(name): the glass swapped shapes instead of morphing: \(swapped)")
+            let between = widths.filter { $0 > 52 + 10 && $0 < wide - 10 }
+            XCTAssertFalse(between.isEmpty, "\(tag) \(name): no glass between the circle and the capsule's sizes, only \(Set(widths).sorted())")
+            XCTAssertEqual(widths.last ?? 0, width, accuracy: 1, "\(tag) \(name): the glass settled at \(widths.last ?? 0)")
+        }
+        tapNow("bar.fold")
+        follow("fold", to: 52)
+        XCTAssertTrue(control(app, "bar.unfold").waitForExistence(timeout: 3), "\(tag): didn't fold")
+        tapNow("bar.unfold")
+        follow("unfold", to: wide)
+        tapNow("bar.fold")
+        follow("fold-again", to: 52)
+        // Left alone, it fades; a tap wakes it and unfolds it, still growing out of it
+        let folded = control(app, "bar.unfold")
+        let deadline = Date().addingTimeInterval(15)
+        while folded.value as? String != "Faded" && Date() < deadline { usleep(300_000) }
+        XCTAssertEqual(folded.value as? String, "Faded", "\(tag): didn't fade")
+        tapNow("bar.unfold")
+        follow("wake-unfold", to: wide)
+        XCTAssertTrue(app.buttons["bar.disconnect"].waitForExistence(timeout: 3), "\(tag): the faded bar didn't unfold")
+        let text = log.joined(separator: "\n")
+        let attachment = XCTAttachment(string: text)
+        attachment.name = "\(tag)-glass"
+        attachment.lifetime = .keepAlways
+        add(attachment)
+        if let dir = ProcessInfo.processInfo.environment["ARTEMIS_SHOT_DIR"], !dir.isEmpty {
+            try? text.write(toFile: dir + "/\(tag)-glass.txt", atomically: true, encoding: .utf8)
+        }
+        app.terminate()
     }
 
     // MARK: The bar at the edges

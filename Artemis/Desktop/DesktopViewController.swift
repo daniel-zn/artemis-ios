@@ -50,7 +50,8 @@ final class DesktopViewController: UIViewController {
     /// Measures the bar (hidden: it follows the same traits, like the text size).
     private lazy var barSizer = UIHostingController(rootView: ControlBar(session: session))
     /// Set while a change of the bar's content is laid out: the bar moves and resizes animated.
-    private var animatesBar = false
+    /// The bar's move while relayoutBar lays it out (nil: it jumps there).
+    private var barAnimation: Animation?
     private let interpreter = TouchInterpreter()
     /// The demo draws its own pointer; a real stream shows the PC's.
     private let localCursor: UIImageView?
@@ -304,8 +305,8 @@ final class DesktopViewController: UIViewController {
     /// Where the bar goes (in the view's coordinates); animated while its content changes.
     private func placeBar(_ frame: CGRect) {
         guard barPlacement.frame != frame else { return }
-        if animatesBar && barPlacement.frame != .zero {
-            withAnimation(.snappy(duration: 0.25)) { barPlacement.frame = frame }
+        if let barAnimation, barPlacement.frame != .zero {
+            withAnimation(barAnimation) { barPlacement.frame = frame }
         } else {
             barPlacement.frame = frame
         }
@@ -572,14 +573,14 @@ final class DesktopViewController: UIViewController {
 
     /// Sizes the bar again after its content changed. SwiftUI updates the content on its next
     /// pass, so it's measured again then too.
-    private func relayoutBar() {
+    private func relayoutBar(animation: Animation = .snappy(duration: 0.25)) {
         let layout = { [weak self] in
             guard let self else { return }
             self.barSizer.view.invalidateIntrinsicContentSize()
             self.view.setNeedsLayout()
-            self.animatesBar = true
+            self.barAnimation = animation
             self.view.layoutIfNeeded()
-            self.animatesBar = false
+            self.barAnimation = nil
             self.updateAccessibilityValue()
         }
         layout()
@@ -657,9 +658,12 @@ final class DesktopViewController: UIViewController {
             self.updateAccessibilityValue()
         }
         actions.setBarExpanded = { [weak self] expanded in
-            self?.session.barExpanded = expanded
-            self?.relayoutBar()
-            self?.updateAccessibilityValue()
+            guard let self else { return }
+            // The glass and the bar's place in one spring: the capsule shrinks into the round
+            // button where it sits (inside the screen's edges) and grows back out of it
+            withAnimation(ControlBar.foldAnimation) { self.session.barExpanded = expanded }
+            self.relayoutBar(animation: ControlBar.foldAnimation)
+            self.updateAccessibilityValue()
         }
         return actions
     }

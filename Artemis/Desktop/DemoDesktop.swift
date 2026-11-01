@@ -48,6 +48,12 @@ final class DemoDesktopViewController: UIViewController {
         desktop.view.autoresizingMask = [.flexibleWidth, .flexibleHeight]
         view.addSubview(desktop.view)
         desktop.didMove(toParent: self)
+        // The glass the UI tests see mid-animation (-ArtemisDemoGlassProbe YES), see GlassProbe
+        if UserDefaults.standard.bool(forKey: "ArtemisDemoGlassProbe") {
+            let probe = GlassProbe(watching: desktop.view)
+            probe.frame = CGRect(x: 0, y: 0, width: 1, height: 1)
+            view.addSubview(probe)
+        }
     }
 
     private var ranGamepadScript = false
@@ -386,5 +392,41 @@ final class DemoControllerScript: NSObject, ControllerSupportDelegate {
     func mousePresenceChanged() {}
     func streamExitRequested() {
         input.note("exit requested")
+    }
+}
+
+/// For the UI tests: each piece of glass on the screen as it is drawn right now (mid-animation
+/// too), from the layers' presentation: "x y w h" lines in the window's coordinates. Liquid Glass
+/// draws each shape as a signed-distance-field element layer.
+final class GlassProbe: UIView {
+    private weak var watched: UIView?
+
+    init(watching view: UIView) {
+        watched = view
+        super.init(frame: .zero)
+        isUserInteractionEnabled = false
+        isAccessibilityElement = true
+        accessibilityIdentifier = "demo.glass"
+    }
+
+    required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
+
+    override var accessibilityValue: String? {
+        get {
+            guard let root = watched?.window?.layer, let rootNow = root.presentation() else { return "" }
+            var lines: [String] = []
+            func walk(_ layer: CALayer) {
+                let now = layer.presentation() ?? layer
+                guard !layer.isHidden, now.opacity > 0.01 else { return }
+                if String(describing: type(of: layer)) == "CASDFElementLayer" {
+                    let frame = now.convert(now.bounds, to: rootNow)
+                    lines.append(String(format: "%.1f %.1f %.1f %.1f", frame.minX, frame.minY, frame.width, frame.height))
+                }
+                layer.sublayers?.forEach(walk)
+            }
+            walk(root)
+            return lines.joined(separator: "\n")
+        }
+        set {}
     }
 }

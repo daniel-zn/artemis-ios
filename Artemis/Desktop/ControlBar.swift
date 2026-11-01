@@ -3,8 +3,8 @@
 //  Artemis
 //
 //  The connected screen's Liquid Glass controls: the control bar (floating and movable in
-//  landscape, foldable into a button; centred at the bottom when upright). The key row above
-//  the keyboard is in KeyRow.swift.
+//  landscape, foldable into a round button; centred at the bottom when upright). The key row
+//  above the keyboard is in KeyRow.swift.
 //
 
 import SwiftUI
@@ -12,32 +12,55 @@ import SwiftUI
 struct ControlBar: View {
     let session: DesktopSession
 
+    /// Folding and unfolding (the bar's glass and its place on the screen together); ten times
+    /// slower in the UI tests' slow motion (-ArtemisDemoSlowMotion YES).
+    static var foldAnimation: Animation {
+        let spring = Animation.spring(duration: 0.45, bounce: 0.2)
+        return UserDefaults.standard.bool(forKey: "ArtemisDemoSlowMotion") ? spring.speed(0.1) : spring
+    }
+
     var body: some View {
-        Group {
+        GlassEffectContainer(spacing: 8) {
             if session.isPortrait {
-                docked
-            } else if session.barExpanded {
-                floating
+                // Upright: the bar's icons alone, centred under the desktop
+                HStack(spacing: 2) { BarButtons(session: session) }
+                    .padding(.horizontal, 6)
+                    .padding(.vertical, 4)
+                    .glassEffect(.regular, in: .capsule)
             } else {
-                folded
+                FloatingBar(session: session)
             }
         }
-        .animation(.snappy(duration: 0.25), value: session.barExpanded)
+        .buttonStyle(.plain)
+        .animation(Self.foldAnimation, value: session.barExpanded)
         .animation(.snappy(duration: 0.25), value: session.isZoomed)
     }
+}
 
-    // MARK: Layouts
+/// Landscape: one piece of glass over the desktop, open (a capsule of icons, dragged by its
+/// grip) or folded (a round button: dragged anywhere, a tap opens it). Folding shrinks the
+/// capsule into the circle and unfolding grows it back out of it: the same glass, its width
+/// animating, the icons fading inside it. (Two shapes swapped under one
+/// glassEffectID don't morph, not even bare: they jump.) Folded and left untouched for a few
+/// seconds, it fades to a faint button so it hides over the desktop; a touch brings the glass
+/// back at once (and still does what it does), and the wait starts again after each.
+private struct FloatingBar: View {
+    let session: DesktopSession
+    /// How long the folded bar stays glass after a touch.
+    static var fadeDelay: Duration { .seconds(5) }
+    /// The folded bar's size.
+    static let button: CGFloat = 52
 
-    /// Upright: the bar's icons alone, centred under the desktop.
-    private var docked: some View {
-        capsule { buttons() }
-    }
+    @State private var faded = false
+    /// Bumped by each touch: restarts the wait.
+    @State private var touches = 0
 
-    /// Landscape: over the desktop, dragged by its grip.
-    private var floating: some View {
-        capsule {
+    private var open: Bool { session.barExpanded }
+
+    var body: some View {
+        HStack(spacing: 2) {
             grip
-            buttons()
+            BarButtons(session: session)
             Button {
                 session.actions.setBarExpanded(false)
             } label: {
@@ -46,22 +69,59 @@ struct ControlBar: View {
             .accessibilityLabel("Fold Control Bar")
             .accessibilityIdentifier("bar.fold")
         }
-    }
-
-    /// The glass capsule of icons, the same upright and in landscape.
-    private func capsule(@ViewBuilder _ content: () -> some View) -> some View {
-        GlassEffectContainer(spacing: 8) {
-            HStack(spacing: 2, content: content)
-                .padding(.horizontal, 6)
-                .padding(.vertical, 4)
-                .glassEffect(.regular, in: .capsule)
+        .padding(.horizontal, 6)
+        .padding(.vertical, 4)
+        .fixedSize()
+        // Folded, the icons are still there, faded out and out of reach, so the glass around
+        // them can shrink smoothly to the button and grow back, showing them as it goes
+        .opacity(open ? 1 : 0)
+        .allowsHitTesting(open)
+        .accessibilityHidden(!open)
+        .frame(width: open ? nil : Self.button, height: open ? nil : Self.button)
+        .overlay {
+            if !open {
+                // Out quickly when it opens, so it isn't drawn over the icons coming back
+                folded.transition(.asymmetric(insertion: .opacity.combined(with: .scale(scale: 0.6)),
+                                              removal: .opacity.animation(.easeOut(duration: 0.15))))
+            }
         }
-        .buttonStyle(.plain)
+        .clipShape(.capsule)
+        .glassEffect(!open && faded ? .clear : .regular, in: .capsule)
+        .opacity(!open && faded ? 0.45 : 1)
+        .onChange(of: open) { faded = false }
     }
 
-    /// Folded into a round button that can be dragged anywhere.
+    /// The folded button's face: its icon, the gestures and what VoiceOver finds.
     private var folded: some View {
-        FoldedBar(session: session)
+        Image(systemName: "menubar.rectangle")
+            .font(.system(size: 20, weight: .medium))
+            .foregroundStyle(faded ? AnyShapeStyle(.secondary) : AnyShapeStyle(.primary))
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .background {
+                // Faded: a muted disc in the faint glass
+                Circle().fill(Color(white: 0.5).opacity(faded ? 0.35 : 0))
+            }
+            .contentShape(.circle)
+            .gesture(DragGesture(minimumDistance: 4, coordinateSpace: .global)
+                .onChanged {
+                    wake()
+                    session.actions.moveBar($0.translation)
+                }
+                .onEnded { _ in
+                    wake()
+                    session.actions.endMoveBar()
+                })
+            .onTapGesture(perform: unfold)
+            .task(id: touches) {
+                guard (try? await Task.sleep(for: Self.fadeDelay)) != nil else { return }
+                withAnimation(.easeInOut(duration: 0.8)) { faded = true }
+            }
+            .accessibilityElement()
+            .accessibilityLabel("Control Bar")
+            .accessibilityValue(faded ? "Faded" : "")
+            .accessibilityAddTraits(.isButton)
+            .accessibilityAction { unfold() }
+            .accessibilityIdentifier("bar.unfold")
     }
 
     private var grip: some View {
@@ -71,21 +131,31 @@ struct ControlBar: View {
             .rotationEffect(.degrees(90))
             .frame(width: 22, height: 44)
             .contentShape(.rect)
-            .gesture(moveGesture)
+            .gesture(DragGesture(minimumDistance: 4, coordinateSpace: .global)
+                .onChanged { session.actions.moveBar($0.translation) }
+                .onEnded { _ in session.actions.endMoveBar() })
             .accessibilityLabel("Move Control Bar")
             .accessibilityIdentifier("bar.grip")
     }
 
-    private var moveGesture: some Gesture {
-        DragGesture(minimumDistance: 4, coordinateSpace: .global)
-            .onChanged { session.actions.moveBar($0.translation) }
-            .onEnded { _ in session.actions.endMoveBar() }
+    private func wake() {
+        if faded {
+            withAnimation(.easeOut(duration: 0.15)) { faded = false }
+        }
+        touches &+= 1
     }
 
-    // MARK: Buttons
+    private func unfold() {
+        wake()
+        session.actions.setBarExpanded(true)
+    }
+}
 
-    @ViewBuilder
-    private func buttons() -> some View {
+/// The bar's buttons, the same upright and in landscape.
+private struct BarButtons: View {
+    let session: DesktopSession
+
+    var body: some View {
         Button {
             session.actions.toggleKeyboard()
         } label: {
@@ -156,66 +226,6 @@ struct ControlBar: View {
         }
         .accessibilityLabel("Disconnect")
         .accessibilityIdentifier("bar.disconnect")
-    }
-}
-
-/// The folded bar: a round glass button that, left untouched for a few seconds, fades to a flat,
-/// faint one so it hides over the desktop. A touch brings the glass back at once (and still
-/// does what it does: a tap unfolds the bar, a drag moves it); the wait starts again after each.
-private struct FoldedBar: View {
-    let session: DesktopSession
-    /// How long it stays glass after a touch.
-    static var fadeDelay: Duration { .seconds(5) }
-
-    @State private var faded = false
-    /// Bumped by each touch: restarts the wait.
-    @State private var touches = 0
-
-    var body: some View {
-        Image(systemName: "menubar.rectangle")
-            .font(.system(size: 20, weight: .medium))
-            .foregroundStyle(faded ? AnyShapeStyle(.secondary) : AnyShapeStyle(.primary))
-            .frame(width: 52, height: 52)
-            .background {
-                // Faded: a flat, muted disc instead of the glass
-                Circle().fill(Color(white: 0.5).opacity(faded ? 0.35 : 0))
-            }
-            .contentShape(.circle)
-            .glassEffect(faded ? .identity : .regular.interactive(), in: .circle)
-            .opacity(faded ? 0.45 : 1)
-            .gesture(DragGesture(minimumDistance: 4, coordinateSpace: .global)
-                .onChanged {
-                    wake()
-                    session.actions.moveBar($0.translation)
-                }
-                .onEnded { _ in
-                    wake()
-                    session.actions.endMoveBar()
-                })
-            .onTapGesture {
-                wake()
-                session.actions.setBarExpanded(true)
-            }
-            .task(id: touches) {
-                guard (try? await Task.sleep(for: Self.fadeDelay)) != nil else { return }
-                withAnimation(.easeInOut(duration: 0.8)) { faded = true }
-            }
-            .accessibilityElement()
-            .accessibilityLabel("Control Bar")
-            .accessibilityValue(faded ? "Faded" : "")
-            .accessibilityAddTraits(.isButton)
-            .accessibilityAction {
-                wake()
-                session.actions.setBarExpanded(true)
-            }
-            .accessibilityIdentifier("bar.unfold")
-    }
-
-    private func wake() {
-        if faded {
-            withAnimation(.easeOut(duration: 0.15)) { faded = false }
-        }
-        touches &+= 1
     }
 }
 
