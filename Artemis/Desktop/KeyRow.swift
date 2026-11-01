@@ -92,25 +92,21 @@ final class KeyRowView: UIInputView {
         super.layoutSubviews()
         let height = bounds.height
         let hideWidth = hideButton.intrinsicContentSize.width
-        // Bounds and centre, not frames: a key is scaled up while it's pressed
-        let hideFrame = CGRect(x: bounds.width - safeAreaInsets.right - 8 - hideWidth, y: (height - 38) / 2,
-                               width: hideWidth, height: 38)
-        hideButton.bounds.size = hideFrame.size
-        hideButton.center = CGPoint(x: hideFrame.midX, y: hideFrame.midY)
+        hideButton.frame = CGRect(x: bounds.width - safeAreaInsets.right - 8 - hideWidth, y: (height - 38) / 2,
+                                  width: hideWidth, height: 38)
         // The keys run the full width, under the hide button
         scrollView.frame = bounds
         // Fn, then the page's keys, side by side 6 pt apart
         var x: CGFloat = 8 + safeAreaInsets.left
         for key in [pageButton] + keys {
             let width = key.intrinsicContentSize.width
-            key.bounds.size = CGSize(width: width, height: 38)
-            key.center = CGPoint(x: x + width / 2, y: height / 2)
+            key.frame = CGRect(x: x, y: (height - 38) / 2, width: width, height: 38)
             x += width + 6
         }
         // Room at the end for the hide button, so the last key scrolls fully into view beside it
-        scrollView.contentSize = CGSize(width: x + (bounds.width - hideFrame.minX), height: height)
+        scrollView.contentSize = CGSize(width: x + (bounds.width - hideButton.frame.minX), height: height)
         // The keys fade out from just before the button to its middle
-        scrollView.fade = (hideFrame.minX - 10, hideFrame.midX)
+        scrollView.fade = (hideButton.frame.minX - 10, hideButton.frame.midX)
     }
 
     // MARK: Keys
@@ -252,7 +248,8 @@ private final class KeyScrollView: UIScrollView {
 /// One key: Liquid Glass, tinted while its modifier is held, with a lock while it's locked.
 /// The glass isn't interactive: its own press effect reacts to any touch, a swipe of the row
 /// too, and leaves a ghost of the title when tapped fast. The key grows as it lights up
-/// instead, which the row's scroll view delays and cancels for a swipe.
+/// instead, which the row's scroll view delays and cancels for a swipe. Its content grows, not the
+/// key itself: a scaled key would also scale its touch tracking, and count a swipe off it as a tap.
 final class KeyButton: UIButton {
     var modifier: Modifier?
     var onHighlight: ((Bool) -> Void)?
@@ -290,14 +287,28 @@ final class KeyButton: UIButton {
         didSet {
             guard isHighlighted != oldValue else { return }
             onHighlight?(isHighlighted)
-            let lit = isHighlighted
-            if lit { pressed = .now }
-            UIView.animate(springDuration: lit ? 0.25 : 0.35, bounce: lit ? 0 : 0.4, initialSpringVelocity: 0,
-                           delay: lit ? 0 : max(0, 0.12 + pressed.timeIntervalSinceNow),
-                           options: [.allowUserInteraction, .beginFromCurrentState]) {
-                self.transform = lit ? CGAffineTransform(scaleX: 1.15, y: 1.15) : .identity
+            if isHighlighted {
+                pressed = .now
+                showPress(true)
+            } else {
+                // A quick tap lights up and goes out at once: it still shows its press for a moment
+                DispatchQueue.main.asyncAfter(deadline: .now() + max(0, 0.12 + pressed.timeIntervalSinceNow)) { [weak self] in
+                    guard let self, !self.isHighlighted else { return }
+                    self.showPress(false)
+                }
             }
         }
+    }
+
+    private func showPress(_ shown: Bool) {
+        let target = shown ? CATransform3DMakeScale(1.15, 1.15, 1) : CATransform3DIdentity
+        let spring = CASpringAnimation(perceptualDuration: shown ? 0.25 : 0.35, bounce: shown ? 0 : 0.4)
+        spring.keyPath = "sublayerTransform"
+        spring.fromValue = layer.presentation()?.sublayerTransform ?? layer.sublayerTransform
+        spring.toValue = target
+        spring.duration = spring.settlingDuration
+        layer.sublayerTransform = target
+        layer.add(spring, forKey: "press")
     }
 
     func setKey(title: String, accessibility: String) {
@@ -352,14 +363,19 @@ final class KeyButton: UIButton {
     func sampled() -> (scale: CGFloat, stray: Bool) {
         guard let me = layer.presentation() else { return (1, false) }
         var labels = 0, stray = false
-        var scale = me.affineTransform().a
+        // The press grows everything in it alike (sublayerTransform): measured without that
+        let press = max(me.sublayerTransform.m11, 0.01)
+        var scale = press
+        let middle = CGPoint(x: me.bounds.midX, y: me.bounds.midY)
         func visit(_ view: UIView) {
             for sub in view.subviews where !sub.isHidden && sub !== lock {
                 guard let p = sub.layer.presentation(), p.opacity > 0.01 else { continue }
-                let frame = p.convert(p.bounds, to: me)
-                guard !frame.isEmpty else { continue }
+                let pressed = p.convert(p.bounds, to: me)
+                guard !pressed.isEmpty else { continue }
+                let frame = CGRect(x: middle.x + (pressed.minX - middle.x) / press, y: middle.y + (pressed.minY - middle.y) / press,
+                                   width: pressed.width / press, height: pressed.height / press)
                 if sub is UILabel || sub is UIImageView { labels += 1 } else if frame.width > 10 {
-                    scale = max(scale, me.affineTransform().a * frame.width / max(me.bounds.width, 1))
+                    scale = max(scale, press * frame.width / max(me.bounds.width, 1))
                 }
                 if !me.bounds.insetBy(dx: -1, dy: -1).contains(frame) { stray = true }
                 visit(sub)

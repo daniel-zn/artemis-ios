@@ -430,7 +430,8 @@ final class OnScreenGamepadTests: XCTestCase {
         XCUIDevice.shared.orientation = .portrait
         sleep(2)
         let upright = barState(desktop)
-        XCTAssertGreaterThan(upright.bar.width, upright.size.width - 40, "\(tag): not docked upright \(upright.bar)")
+        XCTAssertEqual(upright.bar.midX, upright.size.width / 2, accuracy: 1, "\(tag): not docked upright \(upright.bar)")
+        XCTAssertGreaterThan(upright.bar.maxY, upright.size.height - upright.safe.bottom - 80, "\(tag): not at the bottom upright \(upright.bar)")
         XCTAssertLessThanOrEqual(upright.bar.maxY, upright.size.height - upright.safe.bottom + 0.5, "\(tag): upright \(upright.bar)")
         XCUIDevice.shared.orientation = .landscapeLeft
         sleep(2)
