@@ -19,11 +19,17 @@
 #                                             opens (games, or a PIN that the test cancels)
 #   UI_TESTS=ScreenshotTests/testStreamStartsAndReturns,DesktopTests Scripts/ui-tests.sh
 #                                             exactly these (Class or Class/test, comma-separated;
-#                                             land's selection): fails if one of them didn't run
+#                                             integrate's selection): fails if one of them didn't run
 #
 # Screenshots: build/ui-tests/shots/<appearance>-<orientation>-<text size>-<n>-<screen>.png.
 # Logs: build/ui-tests/<appearance>.log. Exit code: the first failing xcodebuild's.
 set -euo pipefail
+# The "Artemis Build" Simulator belongs to the sim-artemis line: a run outside its turn (by hand)
+# takes the turn first, so it never shares the Simulator with integrate's ui check or another run.
+# Inside the turn (integrate's check, `turn run sim-artemis`), MERCURIUS_TURNS names it already.
+if [[ ",${MERCURIUS_TURNS:-}," != *",sim-artemis,"* ]] && command -v mercurius-agent >/dev/null; then
+  exec mercurius-agent turn run sim-artemis --reason "Artemis UI tests" -- "$0" "$@"
+fi
 cd "$(dirname "$0")/.."
 
 # UI_TESTS: the selected tests, each Class or Class/test of ArtemisUITests
