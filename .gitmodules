@@ -1,6 +1,9 @@
-[submodule "moonlight-common/moonlight-common-c"]
-	path = moonlight-common/moonlight-common-c
-	url = https://github.com/moonlight-stream/moonlight-common-c.git
+[submodule "moonlight-common/moonlight-common-c/enet"]
+	path = moonlight-common/moonlight-common-c/enet
+	url = https://github.com/cgutman/enet.git
+[submodule "moonlight-common/moonlight-common-c/nanors"]
+	path = moonlight-common/moonlight-common-c/nanors
+	url = https://github.com/sleepybishop/nanors.git
 [submodule "X1Kit"]
 	path = X1Kit
 	url = https://github.com/cgutman/X1Kit.git
