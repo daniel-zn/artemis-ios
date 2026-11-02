@@ -14,6 +14,17 @@
       "timeout": 10
     },
     {
+      "name": "touch",
+      "run": "Scripts/touch-tests.sh",
+      "inputs": [
+        "Artemis/Desktop/TouchInterpreter.swift",
+        "ArtemisTouchTests/**",
+        "Scripts/touch-tests.sh"
+      ],
+      "line": "build",
+      "timeout": 10
+    },
+    {
       "name": "ui",
       "run": "s=$(xcrun simctl list devices | grep -F 'Artemis Build (' | grep -oE '[0-9A-F-]{36}' | head -1); [ -n \"$s\" ] || { echo 'No Artemis Build Simulator'; exit 1; }; xcrun simctl boot \"$s\" 2>/dev/null; xcrun simctl bootstatus \"$s\" >/dev/null && SIM=$s APPEARANCES=light Scripts/ui-tests.sh; r=$?; xcrun simctl shutdown $s 2>/dev/null; exit $r",
       "inputs": [

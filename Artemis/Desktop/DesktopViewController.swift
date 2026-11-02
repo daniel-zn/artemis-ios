@@ -872,8 +872,8 @@ extension DesktopViewController: TouchInterpreterDelegate {
         setKeyboard(!session.keyboardShown)
     }
 
-    func haptic(_ style: UIImpactFeedbackGenerator.FeedbackStyle) {
-        UIImpactFeedbackGenerator(style: style).impactOccurred()
+    func haptic(_ style: TouchHaptic) {
+        UIImpactFeedbackGenerator(style: style == .light ? .light : .medium).impactOccurred()
     }
 
     fileprivate func touches(_ touches: Set<UITouch>, phase: UITouch.Phase) {

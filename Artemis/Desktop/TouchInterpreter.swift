@@ -8,7 +8,8 @@
 //  so lifting one finger of a scroll doesn't move the pointer.
 //
 
-import UIKit
+import CoreGraphics
+import Foundation
 
 enum PointerMode: String {
     case trackpad, direct
@@ -21,6 +22,12 @@ struct TouchSample {
     let location: CGPoint
     let desktop: CGPoint?
     let time: TimeInterval
+}
+
+/// A tap's feel (UIKit's impact styles; plain here so the interpreter builds and is tested
+/// without UIKit: Scripts/touch-tests.sh).
+enum TouchHaptic {
+    case light, medium
 }
 
 protocol TouchInterpreterDelegate: AnyObject {
@@ -42,7 +49,7 @@ protocol TouchInterpreterDelegate: AnyObject {
     func pan(by delta: CGVector)
     func resetZoom()
     func toggleKeyboard()
-    func haptic(_ style: UIImpactFeedbackGenerator.FeedbackStyle)
+    func haptic(_ style: TouchHaptic)
 }
 
 final class TouchInterpreter {
@@ -54,6 +61,8 @@ final class TouchInterpreter {
     static let longPressDelay: TimeInterval = 0.45
     static let tapReleaseDelay: TimeInterval = 0.2
     static let twoFingerDoubleTapWait: TimeInterval = 0.25
+    /// A scroll's speed at the lift is measured over this long.
+    static let releaseWindow: TimeInterval = 0.1
 
     private struct Finger {
         var start: CGPoint
@@ -105,7 +114,8 @@ final class TouchInterpreter {
     private var twoStartSpread: CGFloat = 0
     private var twoLastSpread: CGFloat = 0
     private var twoMaxTravel: CGFloat = 0
-    private var scrollVelocity = CGVector.zero
+    /// The scroll's recent centroids (the last `releaseWindow`), for its speed at the lift.
+    private var scrollTrail: [(time: TimeInterval, centroid: CGPoint)] = []
     private var lastScrollTime: TimeInterval = 0
     private var pendingRightClick: DispatchWorkItem?
 
@@ -387,7 +397,7 @@ final class TouchInterpreter {
         phase = .two
         twoKind = .undecided
         twoMaxTravel = 0
-        scrollVelocity = .zero
+        scrollTrail = []
         guard let (a, b) = twoFingers() else { return }
         twoStartCentroid = CGPoint(x: (a.x + b.x) / 2, y: (a.y + b.y) / 2)
         twoLastCentroid = twoStartCentroid
@@ -412,6 +422,7 @@ final class TouchInterpreter {
             } else if travel > 10 {
                 twoKind = .scroll
                 lastScrollTime = time
+                scrollTrail = [(time, twoLastCentroid)]
             } else {
                 return
             }
@@ -420,10 +431,12 @@ final class TouchInterpreter {
         case .scroll:
             let delta = CGVector(dx: centroid.x - twoLastCentroid.x, dy: centroid.y - twoLastCentroid.y)
             delegate.scroll(by: delta)
-            let interval = max(time - lastScrollTime, 1.0 / 240)
-            let instant = CGVector(dx: delta.dx / interval, dy: delta.dy / interval)
-            scrollVelocity = CGVector(dx: scrollVelocity.dx * 0.6 + instant.dx * 0.4, dy: scrollVelocity.dy * 0.6 + instant.dy * 0.4)
             lastScrollTime = time
+            scrollTrail.append((time, centroid))
+            // Keep one sample from before the window, so the window is always covered
+            while scrollTrail.count > 2 && scrollTrail[1].time <= time - Self.releaseWindow {
+                scrollTrail.removeFirst()
+            }
         case .zoom:
             if twoLastSpread > 1 {
                 delegate.zoom(by: spread / twoLastSpread, around: centroid)
@@ -443,13 +456,28 @@ final class TouchInterpreter {
         case .undecided where peak == 2 && duration < Self.tapDuration && twoMaxTravel < Self.slop * 1.5:
             twoFingerTap(at: twoStartCentroid)
         case .scroll:
-            // Only if the fingers were still moving when they lifted
-            if time - lastScrollTime < 0.08, hypot(scrollVelocity.dx, scrollVelocity.dy) > 150 {
-                delegate.startMomentum(velocity: scrollVelocity)
+            // Only if the fingers were still moving when they lifted, and the way they went
+            if time - lastScrollTime < 0.08, let velocity = releaseVelocity(at: time), hypot(velocity.dx, velocity.dy) > 150 {
+                delegate.startMomentum(velocity: velocity)
             }
         default:
             break
         }
+    }
+
+    /// How far the fingers went over the last `releaseWindow` before the lift, per second: a
+    /// real finger's contact rolls back a few points as it comes off the glass, which as one
+    /// frame's speed (120 a second) is a fast swipe the other way. Nothing when that leaves
+    /// them going against the scroll they made.
+    private func releaseVelocity(at time: TimeInterval) -> CGVector? {
+        guard let last = scrollTrail.last,
+              let first = scrollTrail.last(where: { $0.time <= time - Self.releaseWindow }) ?? scrollTrail.first,
+              time - first.time > 0 else { return nil }
+        let velocity = CGVector(dx: (last.centroid.x - first.centroid.x) / (time - first.time),
+                                dy: (last.centroid.y - first.centroid.y) / (time - first.time))
+        let travel = CGVector(dx: last.centroid.x - twoStartCentroid.x, dy: last.centroid.y - twoStartCentroid.y)
+        guard velocity.dx * travel.dx + velocity.dy * travel.dy > 0 else { return nil }
+        return velocity
     }
 
     private func twoFingerTap(at location: CGPoint) {

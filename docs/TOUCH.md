@@ -35,7 +35,11 @@ Switch modes from the control bar (this session) or Settings › Touch & Pointer
 
 A gesture is decided by the most fingers it had: lifting one of two fingers doesn't turn a scroll into a pointer
 move. Two fingers become a zoom when their spread changes more than their centre moves, otherwise a scroll; the
-choice holds until they lift. Movement under 8 points is a tap.
+choice holds until they lift. Movement under 8 points is a tap. A scroll's momentum takes the fingers' speed over the last 0.1 s
+before the lift, and only the way they were going: real fingers land and lift a few frames apart and their contact
+rolls back a few points as they come off the glass, which as one frame's speed is a fast swipe the other way (it used to
+reverse the momentum, and with it short scrolls). `Scripts/touch-tests.sh` plays those timings to the
+interpreter on the Mac (no Simulator).
 
 ## Zoom
 
