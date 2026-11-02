@@ -42,13 +42,21 @@ final class LiveMicTests: XCTestCase {
             springboard.alerts.buttons["Allow"].tap()
         }
 
+        // With one paired PC the app opens its apps by itself; otherwise the PC's row is tapped
         let row = app.buttons["computer.\(name)"]
-        XCTAssertTrue(row.waitForExistence(timeout: 60), "\(name) didn't show up")
-        let online = NSPredicate(format: "NOT (label CONTAINS 'Connecting') AND NOT (label CONTAINS 'Offline')")
-        _ = XCTWaiter.wait(for: [XCTNSPredicateExpectation(predicate: online, object: row)], timeout: 60)
-        print("[live-mic] row: \(row.label)")
-        shot("1-computers")
-        row.tap()
+        let anyGame = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH 'game.'")).firstMatch
+        let deadline = Date().addingTimeInterval(90)
+        while !row.exists && !anyGame.exists && Date() < deadline { sleep(1) }
+        if !anyGame.exists {
+            XCTAssertTrue(row.exists, "\(name) didn't show up")
+            let online = NSPredicate(format: "NOT (label CONTAINS 'Connecting') AND NOT (label CONTAINS 'Offline')")
+            _ = XCTWaiter.wait(for: [XCTNSPredicateExpectation(predicate: online, object: row)], timeout: 60)
+            print("[live-mic] row: \(row.label)")
+            shot("1-computers")
+            row.tap()
+        } else {
+            print("[live-mic] \(name) opened by itself")
+        }
         var game = app.buttons["game.\(appName)"]
         if !game.waitForExistence(timeout: 30) {
             // Another app if the PC has no such one
