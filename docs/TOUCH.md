@@ -21,7 +21,7 @@ with the pointer in the middle of the desktop.
 | Press and hold (0.45 s, haptic), then drag | Left drag |
 | Press and hold, then lift without moving | Right click |
 | Two-finger tap | Right click (when zoomed in, it waits 0.25 s for a second two-finger tap) |
-| Two-finger drag | Scroll, both directions, high-resolution, with momentum after the fingers lift; the wheel events a Mac trackpad sends with natural scrolling (fingers up = wheel down, fingers left = wheel right) |
+| Two-finger drag | Scroll, both directions, high-resolution, with momentum after the fingers lift; Natural moves the PC's content with the fingers: fingers up = wheel up, fingers left = wheel left (the opposite of a Mac trackpad's wheel signs, which scrolled backwards on the PC as seen from a real phone, 2026-11-02) |
 | Pinch | Zooms the view on the iPhone (1× to 5×); moving the fingers while pinching pans |
 | Two-finger double tap | Resets the zoom |
 | Three-finger tap | Shows or hides the keyboard |
@@ -144,7 +144,7 @@ The calls run on one serial queue, so a click's press and release (30 ms apart) 
 ## Settings › Touch & Pointer
 
 Default mode (Trackpad / Direct), Pointer speed, Natural scrolling (content follows the fingers, on by default,
-as on a Mac's trackpad; off reverses both axes and the momentum; `DesktopTests/testScrollDirectionLikeAMac`, upright
+as on a Mac's trackpad; off reverses both axes and the momentum; `DesktopTests/testScrollDirectionFollowsFingers`, upright
 on the trackpad area and in landscape on the desktop), Show control bar.
 
 ## Testing without a PC

@@ -822,8 +822,11 @@ extension DesktopViewController: TouchInterpreterDelegate {
         // Mostly vertical or mostly horizontal: keep to that axis
         if abs(delta.dx) < abs(delta.dy) * 0.5 { delta.dx = 0 }
         if abs(delta.dy) < abs(delta.dx) * 0.5 { delta.dy = 0 }
-        // 120 is one wheel notch: one per ~24 points. Natural scrolling: the content follows the fingers
-        let direction: CGFloat = pointerSettings.naturalScrolling ? 1 : -1
+        // 120 is one wheel notch: one per ~24 points. Natural scrolling: the content follows the
+        // fingers on the PC's screen. On the PC that's fingers down = wheel down (negative),
+        // the opposite of the Mac trackpad convention this first followed: reported twice from a
+        // real phone (2026-10-24, 2026-11-02), so the PC's screen is the reference, not the Mac.
+        let direction: CGFloat = pointerSettings.naturalScrolling ? -1 : 1
         scrollRemainder.dy += delta.dy * 5 * direction
         scrollRemainder.dx += -delta.dx * 5 * direction
         let vertical = Int(scrollRemainder.dy)

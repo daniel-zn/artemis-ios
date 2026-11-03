@@ -33,9 +33,9 @@ struct PointerSettings: Equatable {
             showControlBar: value(Keys.showBar, true, defaults.bool(forKey:)))
     }
 
-    /// Moves every install to Natural once (build 1279): a phone could have Reversed stored from
-    /// before, which scrolled the opposite way to a Mac. Marked done once stored, so a later
-    /// choice of Reversed stays.
+    /// Moves every install to Natural once (build 1279, and again when Natural's direction was
+    /// flipped to match the PC's screen): a phone could have Reversed stored as a workaround.
+    /// Marked done once stored, so a later choice of Reversed stays.
     static func adoptNaturalScrollingOnce() {
         let defaults = UserDefaults.standard
         guard !defaults.bool(forKey: Keys.naturalApplied) else { return }
@@ -61,7 +61,7 @@ struct PointerSettings: Equatable {
     private enum Keys {
         static let speed = "ArtemisPointerSpeed"
         static let natural = "ArtemisNaturalScrolling"
-        static let naturalApplied = "ArtemisNaturalScrollingApplied"
+        static let naturalApplied = "ArtemisNaturalScrollingApplied2"
         static let showBar = "ArtemisShowControlBar"
     }
 }

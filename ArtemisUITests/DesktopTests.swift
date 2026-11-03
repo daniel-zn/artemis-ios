@@ -28,11 +28,12 @@ final class DesktopTests: XCTestCase {
     func testLargeTextUpright() { largeText(orientation: .portrait, name: "portrait") }
     func testLargeTextLandscape() { largeText(orientation: .landscapeLeft, name: "landscape") }
 
-    /// Two-finger scrolling sends what a Mac trackpad sends with natural scrolling (macOS's
-    /// default): fingers up = wheel down (negative: the content moves up with them), fingers
-    /// left = wheel right (positive), momentum on in the same direction after a flick. Upright on
-    /// the trackpad area, in landscape on the desktop. Natural scrolling off reverses it.
-    func testScrollDirectionLikeAMac() {
+    /// Two-finger scrolling with Natural on: fingers up = wheel up (positive), fingers left =
+    /// wheel left (negative), which on the PC moves the content with the fingers (reported from
+    /// a real phone; the Mac-trackpad convention, the other sign, scrolled backwards there). Momentum
+    /// carries on the same way after a flick. Upright on the trackpad area, in landscape on the
+    /// desktop. Reversed reverses it.
+    func testScrollDirectionFollowsFingers() {
         for natural in [true, false] {
             for orientation in [UIDeviceOrientation.portrait, .landscapeLeft] {
                 scrollDirection(orientation: orientation, natural: natural)
@@ -85,7 +86,7 @@ final class DesktopTests: XCTestCase {
         let (app, desktop) = connect(orientation: orientation, extra: extra ?? (natural ? [] : ["-ArtemisNaturalScrolling", "NO"]))
         let area = orientation == .portrait ? app.otherElements["trackpad"].frame : videoFrame(desktop)
         XCTAssertFalse(area.isEmpty, "\(tag): no surface")
-        let sign = natural ? 1 : -1
+        let sign = natural ? -1 : 1
         func scrolls(_ new: [String]) -> [(Int, Int)] {
             new.filter { $0.hasPrefix("scroll") }.compactMap { event in
                 let parts = event.split(separator: " ")
@@ -104,7 +105,7 @@ final class DesktopTests: XCTestCase {
             return scrolls(new)
         }
 
-        // Fingers up, slowly: wheel down (negative), nothing sideways
+        // Fingers up, slowly (Natural): wheel up (positive), nothing sideways
         let up = twoFingers(by: CGVector(dx: 0, dy: -min(100, area.height * 0.6)), duration: 0.8)
         print("SCROLL \(tag) fingers up: \(up.map { "\($0.0) \($0.1)" })")
         XCTAssertFalse(up.isEmpty, "\(tag) fingers up: no scroll")
@@ -115,11 +116,11 @@ final class DesktopTests: XCTestCase {
             return
         }
 
-        // Fingers down: wheel up
+        // Fingers down (Natural): wheel down
         let down = twoFingers(by: CGVector(dx: 0, dy: min(100, area.height * 0.6)), duration: 0.8)
         XCTAssertGreaterThan(down.map(\.0).reduce(0, +) * sign, 120, "\(tag) fingers down: \(down)")
 
-        // Fingers left: wheel right (positive)
+        // Fingers left (Natural): wheel left (negative)
         let left = twoFingers(by: CGVector(dx: -min(140, area.width * 0.5), dy: 0), duration: 0.8)
         print("SCROLL \(tag) fingers left: \(left.map { "\($0.0) \($0.1)" })")
         XCTAssertGreaterThan(left.map(\.1).reduce(0, +) * sign, 120, "\(tag) fingers left: \(left)")
