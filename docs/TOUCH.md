@@ -20,6 +20,7 @@ with the pointer in the middle of the desktop.
 | Tap, then touch again and drag | Left drag (select text, move windows) |
 | Press and hold (0.45 s, haptic), then drag | Left drag |
 | Press and hold, then lift without moving | Right click |
+| Rest one finger, drag another | Left drag (move windows, select), as on a MacBook's trackpad: the button goes down when the second finger has moved 12 points while the resting one stayed within 4, and the pointer follows the moving finger (pointer speed and acceleration as one finger). The moving finger may lift and land again to carry on; the button comes up when the resting finger lifts (or the touches are cancelled, or the session ends). The resting finger must land at least 0.1 s before the other and be still (within 8 points) when it does: fingers landing together, or a resting finger that then moves with the other, are a scroll or a pinch as usual. While it rests, the other finger's first 12 points decide nothing, so a resting finger with the other moving away from it is a drag, not a pinch. A second finger landing cancels the pending hold: holding past 0.45 s, then landing a second finger gives the hold's haptic but no right click (that only comes from lifting a finger held alone), and a second finger that just taps does nothing |
 | Two-finger tap | Right click (when zoomed in, it waits 0.25 s for a second two-finger tap) |
 | Two-finger drag | Scroll, both directions, high-resolution, with momentum after the fingers lift; Natural moves the PC's content with the fingers: fingers up = wheel up, fingers left = wheel left (the opposite of a Mac trackpad's wheel signs, which scrolled backwards on the PC as seen from a real phone, 2026-11-02) |
 | Pinch | Zooms the view on the iPhone (1× to 5×); moving the fingers while pinching pans |
@@ -34,12 +35,14 @@ fingers scroll and pinch as in trackpad mode; three fingers tap and pan the same
 Switch modes from the control bar (this session) or Settings › Touch & Pointer (the default).
 
 A gesture is decided by the most fingers it had: lifting one of two fingers doesn't turn a scroll into a pointer
-move. Two fingers become a zoom when their spread changes more than their centre moves, otherwise a scroll; the
+move. (The one exception is the resting-finger drag above, which carries on with whichever finger lands next.) Two fingers become a zoom when their spread changes more than their centre moves, otherwise a scroll; the
 choice holds until they lift. Movement under 8 points is a tap. A scroll's momentum takes the fingers' speed over the last 0.1 s
 before the lift, and only the way they were going: real fingers land and lift a few frames apart and their contact
 rolls back a few points as they come off the glass, which as one frame's speed is a fast swipe the other way (it used to
 reverse the momentum, and with it short scrolls). `Scripts/touch-tests.sh` plays those timings to the
-interpreter on the Mac (no Simulator).
+interpreter on the Mac (no Simulator), and every gesture of the table on the interpreter's own clock
+(`ArtemisTouchTests/Gestures.swift`: the resting-finger drag and the taps, holds, pinches and three-finger tap
+next to it); `DesktopTests/testHoldAndDragWithSecondFinger` plays the resting-finger drag on the demo desktop.
 
 ## Zoom
 

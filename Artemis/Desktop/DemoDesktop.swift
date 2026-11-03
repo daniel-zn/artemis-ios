@@ -153,6 +153,7 @@ final class DemoDesktopViewController: UIViewController {
                 "",
                 "Trackpad: drag one finger to move the pointer, tap to click.",
                 "Two fingers: tap to right-click, drag to scroll, pinch to zoom.",
+                "Hold one finger and drag another to click and drag.",
                 "Three fingers: tap for the keyboard.",
                 "",
                 "The quick brown fox jumps over the lazy dog. 0123456789",

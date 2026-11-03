@@ -345,6 +345,8 @@ final class DesktopViewController: UIViewController {
     override func viewWillDisappear(_ animated: Bool) {
         super.viewWillDisappear(animated)
         stopMomentum()
+        // A drag's button never stays down on the PC
+        interpreter.cancelled()
         gamepadMouse.stop()
         setGamepad(false)
     }
@@ -632,6 +634,7 @@ final class DesktopViewController: UIViewController {
         }
         actions.disconnect = { [weak self] in
             self?.stopMomentum()
+            self?.interpreter.cancelled()
             self?.setGamepad(false)
             self?.setKeyboard(false)
             self?.onDisconnect?()

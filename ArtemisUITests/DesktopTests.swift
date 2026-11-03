@@ -41,6 +41,44 @@ final class DesktopTests: XCTestCase {
         }
     }
 
+    /// Trackpad: one finger resting, another dragging = a click and drag (move a window): the
+    /// left button goes down as the second finger moves, the pointer follows it, and the button
+    /// comes up when the resting finger lifts, after the moving one. Upright on the trackpad
+    /// area, in landscape on the desktop.
+    func testHoldAndDragWithSecondFinger() {
+        for orientation in [UIDeviceOrientation.portrait, .landscapeLeft] {
+            let tag = orientation == .portrait ? "portrait trackpad" : "landscape desktop"
+            let (app, desktop) = connect(orientation: orientation)
+            let area = orientation == .portrait ? app.otherElements["trackpad"].frame : videoFrame(desktop)
+            XCTAssertFalse(area.isEmpty, "\(tag): no surface")
+            let count = state(desktop).count
+            // The resting finger: down 1.4 s; the other lands 0.3 s later, rests 0.1 s, moves 0.6 s, lifts
+            let rest = CGPoint(x: area.minX + area.width * 0.2, y: area.midY)
+            let mover = CGPoint(x: area.midX - 40, y: area.midY)
+            XCTAssertTrue(MultiTouch.timed([(rest, .zero, 0, 1.4, 0),
+                                            (mover, CGVector(dx: min(120, area.width * 0.35), dy: 0), 0.3, 0.6, 0.1)], testCase: self),
+                          "\(tag): couldn't synthesize two fingers")
+            let deadline = Date().addingTimeInterval(5)
+            var new = events(desktop, since: count)
+            while !new.contains("up left") && Date() < deadline {
+                usleep(200_000)
+                new = events(desktop, since: count)
+            }
+            let buttons = new.filter { $0.hasPrefix("down") || $0.hasPrefix("up") }
+            XCTAssertEqual(buttons, ["down left", "up left"], "\(tag): \(new)")
+            if let down = new.firstIndex(of: "down left"), let up = new.lastIndex(of: "up left"), down < up {
+                let held = moves(Array(new[down..<up]))
+                XCTAssertGreaterThan(held.count, 2, "\(tag): no moves while held (\(new))")
+                if let first = held.first, let last = held.last {
+                    XCTAssertGreaterThan(last.0, first.0, "\(tag): the pointer didn't follow the finger right (\(held))")
+                }
+                XCTAssertTrue(moves(Array(new[..<down])).isEmpty, "\(tag): moved before the button went down (\(new))")
+            }
+            XCTAssertFalse(new.contains { $0.hasPrefix("scroll") || $0.hasSuffix("right") }, "\(tag): scrolled or right-clicked (\(new))")
+            app.terminate()
+        }
+    }
+
     /// A phone with Reversed stored from before moves to Natural once; choosing Reversed in
     /// Settings › Touch & Pointer › Scroll direction afterwards stays across launches.
     func testScrollDirectionMovesToNaturalOnce() {

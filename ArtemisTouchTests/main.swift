@@ -6,7 +6,8 @@
 //  don't: fingers landing and lifting a few frames apart, a swipe slowing down before the lift,
 //  and the contact point rolling back a few points as the fingers come off the glass. Whatever
 //  happens at the edges, the scroll (with its momentum) must go the way the fingers went.
-//  Run: Scripts/touch-tests.sh
+//  The other gestures (click and drag with a resting finger, taps, holds, pinches) are in
+//  Gestures.swift. Run: Scripts/touch-tests.sh
 //
 
 import CoreGraphics
@@ -111,6 +112,8 @@ for (label, axis) in axes {
         }
     }
 }
+
+runGestureTests()
 
 print(failures == 0 ? "\nall \(count) checks passed" : "\n\(failures) of \(count) checks failed")
 exit(failures == 0 ? 0 : 1)

@@ -5,7 +5,8 @@
 //  Turns raw touches into the remote desktop's gestures (docs/TOUCH.md): pointer moves,
 //  clicks, drags, scrolling, zooming and panning, the keyboard toggle. A gesture lasts from
 //  the first finger down to the last finger up and is decided by the most fingers it had,
-//  so lifting one finger of a scroll doesn't move the pointer.
+//  so lifting one finger of a scroll doesn't move the pointer. Trackpad: a finger resting while
+//  another moves is a click and drag, held until the resting finger lifts.
 //
 
 import CoreGraphics
@@ -54,6 +55,11 @@ protocol TouchInterpreterDelegate: AnyObject {
 
 final class TouchInterpreter {
     weak var delegate: TouchInterpreterDelegate?
+    /// Runs a timer's work after a delay (the hold, a tap's release); the Mac tests play it on
+    /// their own clock.
+    var schedule: (TimeInterval, DispatchWorkItem) -> Void = { delay, work in
+        DispatchQueue.main.asyncAfter(deadline: .now() + delay, execute: work)
+    }
 
     // Tuning
     static let slop: CGFloat = 8
@@ -63,12 +69,21 @@ final class TouchInterpreter {
     static let twoFingerDoubleTapWait: TimeInterval = 0.25
     /// A scroll's speed at the lift is measured over this long.
     static let releaseWindow: TimeInterval = 0.1
+    /// Click and drag with a resting finger: it lands at least this long before the other
+    /// finger (fingers landing together are a scroll or a pinch), moves at most `restSlop`
+    /// while the other one goes `dragSlop`.
+    static let restLead: TimeInterval = 0.1
+    static let restSlop: CGFloat = 4
+    static let dragSlop: CGFloat = 12
 
     private struct Finger {
         var start: CGPoint
+        var startTime: TimeInterval
         var previous: CGPoint
         var last: CGPoint
         var lastTime: TimeInterval
+        /// Since the move before.
+        var interval: TimeInterval = 0
         var startDesktop: CGPoint?
         var desktop: CGPoint?
     }
@@ -78,7 +93,8 @@ final class TouchInterpreter {
     }
 
     private enum TwoFingerKind {
-        case undecided, scroll, zoom
+        /// drag: the first finger rests, the second moves the pointer with the left button down.
+        case undecided, scroll, zoom, drag
     }
 
     private var fingers: [ObjectIdentifier: Finger] = [:]
@@ -94,7 +110,7 @@ final class TouchInterpreter {
 
     // One finger
     private var moved = false
-    /// The left button is held by this gesture (a drag).
+    /// The left button is held by this gesture (a drag, with one finger or with a resting one).
     private var dragging = false
     private var longPressFired = false
     private var longPressTimer: DispatchWorkItem?
@@ -118,6 +134,9 @@ final class TouchInterpreter {
     private var scrollTrail: [(time: TimeInterval, centroid: CGPoint)] = []
     private var lastScrollTime: TimeInterval = 0
     private var pendingRightClick: DispatchWorkItem?
+    /// Trackpad: the first finger rested until the second landed (`restLead` before), so this
+    /// can be a click and drag; where it was then.
+    private var restingFinger: CGPoint?
 
     // Three fingers
     private var threeStartCentroid = CGPoint.zero
@@ -130,7 +149,7 @@ final class TouchInterpreter {
         guard let delegate else { return }
         let newGesture = phase == .idle
         for sample in samples where fingers[sample.id] == nil {
-            fingers[sample.id] = Finger(start: sample.location, previous: sample.location, last: sample.location,
+            fingers[sample.id] = Finger(start: sample.location, startTime: sample.time, previous: sample.location, last: sample.location,
                                         lastTime: sample.time, startDesktop: sample.desktop, desktop: sample.desktop)
             order.append(sample.id)
         }
@@ -153,16 +172,17 @@ final class TouchInterpreter {
         case 1 where newGesture:
             beginOne(time: time)
         case 2:
-            // A drag keeps going with its one finger; other fingers don't count
+            // A drag keeps going with its one finger; other fingers don't count. A drag with a
+            // resting finger: the finger landing again carries on moving the pointer
             guard !dragging else { return }
-            beginTwo()
+            beginTwo(time: time)
         case 3:
             guard !dragging else { return }
             beginThree()
         default:
-            if fingers.count > 3 {
+            if fingers.count > 3 && !dragging {
                 cancelTimers()
-                phase = dragging ? .one : .ignored
+                phase = .ignored
             }
         }
     }
@@ -173,11 +193,11 @@ final class TouchInterpreter {
             finger.previous = finger.last
             finger.last = sample.location
             finger.desktop = sample.desktop
-            let interval = sample.time - finger.lastTime
+            finger.interval = sample.time - finger.lastTime
             finger.lastTime = sample.time
             fingers[sample.id] = finger
             if phase == .one, sample.id == order.first {
-                movedOne(finger, interval: interval)
+                movedOne(finger, interval: finger.interval)
             }
         }
         guard !lifting else { return }
@@ -198,8 +218,14 @@ final class TouchInterpreter {
             }
         }
         if fingers.count > samples.count {
-            if phase == .one && primaryLifted {
-                // The dragging finger lifted and others are still down: the drag is over
+            if phase == .two && twoKind == .drag && !primaryLifted {
+                // The moving finger lifted, the resting one is still down: the button stays
+                // down for the next finger to carry on
+                for sample in samples { remove(sample.id) }
+                return
+            }
+            if (phase == .one || (phase == .two && twoKind == .drag)) && primaryLifted {
+                // The dragging (or resting) finger lifted and others are still down: the drag is over
                 finish(time: samples.first?.time ?? 0)
                 phase = .ignored
             }
@@ -309,7 +335,7 @@ final class TouchInterpreter {
             }
         }
         longPressTimer = work
-        DispatchQueue.main.asyncAfter(deadline: .now() + Self.longPressDelay, execute: work)
+        schedule(Self.longPressDelay, work)
     }
 
     private func finishOne(time: TimeInterval) {
@@ -342,7 +368,7 @@ final class TouchInterpreter {
                     self.delegate?.setButton(.left, down: false)
                 }
                 pendingRelease = work
-                DispatchQueue.main.asyncAfter(deadline: .now() + Self.tapReleaseDelay, execute: work)
+                schedule(Self.tapReleaseDelay, work)
             }
         case .direct:
             if dragging {
@@ -387,9 +413,17 @@ final class TouchInterpreter {
         return (a.last, b.last)
     }
 
-    private func beginTwo() {
+    private func beginTwo(time: TimeInterval) {
+        // A second finger comes before the hold's right click (which happens only on the lift
+        // of a finger held alone)
         longPressTimer?.cancel()
         longPressTimer = nil
+        restingFinger = nil
+        if mode == .trackpad, !moved, let first = order.first.flatMap({ fingers[$0] }),
+           time - first.startTime >= Self.restLead,
+           hypot(first.last.x - first.start.x, first.last.y - first.start.y) <= Self.slop {
+            restingFinger = first.last
+        }
         if tapThenTouch {
             flushPendingRelease()
             tapThenTouch = false
@@ -413,6 +447,16 @@ final class TouchInterpreter {
             if let finger = fingers[id] {
                 twoMaxTravel = max(twoMaxTravel, hypot(finger.last.x - finger.start.x, finger.last.y - finger.start.y))
             }
+        }
+        if twoKind == .undecided, let rest = restingFinger, let mover = order.dropFirst().first.flatMap({ fingers[$0] }),
+           hypot(a.x - rest.x, a.y - rest.y) <= Self.restSlop {
+            // The first finger rests: the other one's first points decide nothing (not a
+            // pinch, not a scroll); past them it's a click and drag
+            guard hypot(mover.last.x - mover.start.x, mover.last.y - mover.start.y) > Self.dragSlop else { return }
+            twoKind = .drag
+            dragging = true
+            delegate.setButton(.left, down: true)
+            delegate.haptic(.light)
         }
         if twoKind == .undecided {
             let travel = hypot(centroid.x - twoStartCentroid.x, centroid.y - twoStartCentroid.y)
@@ -442,6 +486,12 @@ final class TouchInterpreter {
                 delegate.zoom(by: spread / twoLastSpread, around: centroid)
             }
             delegate.pan(by: CGVector(dx: centroid.x - twoLastCentroid.x, dy: centroid.y - twoLastCentroid.y))
+        case .drag:
+            // The pointer follows the moving finger, as one finger moves it
+            if let mover = order.dropFirst().first.flatMap({ fingers[$0] }), mover.last != mover.previous {
+                delegate.movePointer(by: CGVector(dx: mover.last.x - mover.previous.x, dy: mover.last.y - mover.previous.y),
+                                     interval: mover.interval)
+            }
         case .undecided:
             break
         }
@@ -455,6 +505,9 @@ final class TouchInterpreter {
         switch twoKind {
         case .undecided where peak == 2 && duration < Self.tapDuration && twoMaxTravel < Self.slop * 1.5:
             twoFingerTap(at: twoStartCentroid)
+        case .drag:
+            delegate.setButton(.left, down: false)
+            dragging = false
         case .scroll:
             // Only if the fingers were still moving when they lifted, and the way they went
             if time - lastScrollTime < 0.08, let velocity = releaseVelocity(at: time), hypot(velocity.dx, velocity.dy) > 150 {
@@ -507,7 +560,7 @@ final class TouchInterpreter {
                 click()
             }
             pendingRightClick = work
-            DispatchQueue.main.asyncAfter(deadline: .now() + Self.twoFingerDoubleTapWait, execute: work)
+            schedule(Self.twoFingerDoubleTapWait, work)
         } else {
             click()
         }
