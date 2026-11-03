@@ -137,6 +137,10 @@ final class TouchInterpreter {
     /// Trackpad: the first finger rested until the second landed (`restLead` before), so this
     /// can be a click and drag; where it was then.
     private var restingFinger: CGPoint?
+    /// The last two-finger gesture, for the demo desktop's state line (UI tests): its kind and
+    /// how long the first finger was down before the second landed.
+    private(set) var lastTwoFinger = "none"
+    private var twoLead: TimeInterval = 0
 
     // Three fingers
     private var threeStartCentroid = CGPoint.zero
@@ -210,6 +214,19 @@ final class TouchInterpreter {
     }
 
     func ended(_ samples: [TouchSample]) {
+        // A touch that lifts the instant it landed, beside other fingers, never was: no finger
+        // can, but XCTest's synthesizer adds one at the start for each finger that lands later
+        if !samples.isEmpty, fingers.count > samples.count,
+           samples.allSatisfy({ sample in fingers[sample.id].map { $0.startTime == sample.time && $0.start == $0.last } ?? false }) {
+            for sample in samples { remove(sample.id) }
+            peak = fingers.count
+            if fingers.count == 1, phase == .two, twoKind == .undecided {
+                // Back to the one finger it was, its hold timed from its landing
+                phase = .one
+                if mode == .direct || !tapThenTouch { scheduleLongPress() }
+            }
+            return
+        }
         let primaryLifted = samples.contains { $0.id == order.first }
         for sample in samples {
             if var finger = fingers[sample.id] {
@@ -419,6 +436,7 @@ final class TouchInterpreter {
         longPressTimer?.cancel()
         longPressTimer = nil
         restingFinger = nil
+        twoLead = order.first.flatMap { fingers[$0] }.map { time - $0.startTime } ?? 0
         if mode == .trackpad, !moved, let first = order.first.flatMap({ fingers[$0] }),
            time - first.startTime >= Self.restLead,
            hypot(first.last.x - first.start.x, first.last.y - first.start.y) <= Self.slop {
@@ -502,6 +520,7 @@ final class TouchInterpreter {
     private func finishTwo(time: TimeInterval) {
         guard let delegate else { return }
         let duration = time - gestureStart
+        lastTwoFinger = String(format: "%@ lead %.2f%@", "\(twoKind)", twoLead, restingFinger == nil ? "" : " resting")
         switch twoKind {
         case .undecided where peak == 2 && duration < Self.tapDuration && twoMaxTravel < Self.slop * 1.5:
             twoFingerTap(at: twoStartCentroid)

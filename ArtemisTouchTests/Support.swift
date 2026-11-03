@@ -123,6 +123,17 @@ func play(_ fingers: [FingerPath], hz: Double = 120, mode: PointerMode = .trackp
         var began: [TouchSample] = [], moved: [TouchSample] = [], ended: [TouchSample] = []
         var lifted: [Int] = []
         for (i, finger) in fingers.enumerated() {
+            if finger.up <= finger.down {
+                // Lands and lifts in the same instant (XCTest's synthesizer does it)
+                if abs(time - finger.down) < frame / 2 {
+                    let location = finger.at(time)
+                    let sample = TouchSample(id: ids[i], location: location, desktop: area ? nil : recorder.desktopPoint(at: location), time: time)
+                    began.append(sample)
+                    ended.append(sample)
+                    lifted.append(i)
+                }
+                continue
+            }
             if !down.contains(i) && time >= finger.down - 1e-9 && time < finger.up - 1e-9 {
                 down.insert(i)
                 let location = finger.at(time)

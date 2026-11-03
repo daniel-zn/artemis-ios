@@ -42,7 +42,10 @@ rolls back a few points as they come off the glass, which as one frame's speed i
 reverse the momentum, and with it short scrolls). `Scripts/touch-tests.sh` plays those timings to the
 interpreter on the Mac (no Simulator), and every gesture of the table on the interpreter's own clock
 (`ArtemisTouchTests/Gestures.swift`: the resting-finger drag and the taps, holds, pinches and three-finger tap
-next to it); `DesktopTests/testHoldAndDragWithSecondFinger` plays the resting-finger drag on the demo desktop.
+next to it); `DesktopTests/testHoldAndDragWithSecondFinger` plays the resting-finger drag on the demo desktop. A touch that lands and lifts
+in the same instant while other fingers are down is ignored: no finger can do that, but XCTest's synthesizer adds one
+at the start of a gesture for each finger that lands later (and won't play two gestures at once), which would make the
+other fingers' gesture look like fingers lifting.
 
 ## Zoom
 

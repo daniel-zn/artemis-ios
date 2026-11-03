@@ -696,6 +696,7 @@ final class DesktopViewController: UIViewController {
         lines[0] += " · edges " + Self.describe(deferredEdges)
         lines[0] += " · on-screen controller " + (session.gamepadShown ? "shown" : "hidden")
         lines[0] += " · notices \(toastCount)"
+        lines[0] += " · two fingers " + interpreter.lastTwoFinger
         let order = view.subviews
         lines[0] += " · desktop over trackpad " + ((order.firstIndex(of: canvas) ?? 0) > (order.firstIndex(of: trackpadArea) ?? 0) ? "yes" : "no")
         let exclusive = view.interactions.contains { ($0 as? GCEventInteraction).map { $0.handledEventTypes.contains(.gamepad) && !$0.receivesEventsInView } ?? false }
@@ -912,7 +913,9 @@ extension DesktopViewController: TouchInterpreterDelegate {
         switch phase {
         case .began: interpreter.began(samples, onTrackpadArea: onArea)
         case .moved: interpreter.moved(samples)
-        case .ended: interpreter.ended(samples)
+        case .ended:
+            interpreter.ended(samples)
+            if recordedEvents != nil { updateAccessibilityValue() }
         default:
             stopMomentum()
             interpreter.cancelled()

@@ -91,6 +91,14 @@ func runGestureTests() {
     check("both fingers landing together, one still, the other moving: not a drag (the resting finger lands first)",
           buttons(r).isEmpty, "\(r.other)")
 
+    r = play([still(0, 1.5, at: anchor), still(0, 0, at: other),
+              finger(0.3, 1.0, [(0.4, other), (0.9, p(340, 500))])])
+    check("hold + drag as XCTest synthesizes it (a touch landing and lifting with the first): still a drag",
+          r.timeline == ["lift 1", "down left", "move", "lift 2", "lift 0", "up left"], "\(r.timeline)")
+
+    r = play([still(0, 0.8, at: anchor), still(0, 0, at: other)])
+    check("press and hold beside a touch that lands and lifts at once: still a right click", r.other == ["click right"], "\(r.other)")
+
     r = play([still(0, 1.5, at: anchor),
               still(1.0, 1.1, at: other)])
     check("hold, a second finger taps: nothing (no right click from the hold)", r.other.isEmpty, "\(r.other)")

@@ -65,7 +65,7 @@ final class DesktopTests: XCTestCase {
                 new = events(desktop, since: count)
             }
             let buttons = new.filter { $0.hasPrefix("down") || $0.hasPrefix("up") }
-            XCTAssertEqual(buttons, ["down left", "up left"], "\(tag): \(new)")
+            XCTAssertEqual(buttons, ["down left", "up left"], "\(tag): \(new) (\(state(desktop).status))")
             if let down = new.firstIndex(of: "down left"), let up = new.lastIndex(of: "up left"), down < up {
                 let held = moves(Array(new[down..<up]))
                 XCTAssertGreaterThan(held.count, 2, "\(tag): no moves while held (\(new))")
