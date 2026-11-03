@@ -806,7 +806,7 @@ final class DesktopTests: XCTestCase {
         new = events(desktop, since: count)
         XCTAssertEqual(new.filter { $0.hasSuffix("right") }, ["down right", "up right"], "\(tag) two-finger tap: \(new)")
 
-        // Two-finger drag: scroll (natural: fingers down scrolls up, positive)
+        // Two-finger drag: scroll (Natural: fingers down = wheel down, negative)
         count = state(desktop).count
         XCTAssertTrue(MultiTouch.drag(fingers: [CGPoint(x: video.midX - 30, y: video.midY - 40), CGPoint(x: video.midX + 30, y: video.midY - 40)],
                                       by: CGVector(dx: 0, dy: 80), duration: 0.5, testCase: self), "\(tag): couldn't synthesize two fingers")
@@ -815,7 +815,7 @@ final class DesktopTests: XCTestCase {
         let scrolls = new.filter { $0.hasPrefix("scroll") }
         XCTAssertFalse(scrolls.isEmpty, "\(tag) two-finger drag: no scroll (\(new))")
         let vertical = scrolls.compactMap { Int($0.split(separator: " ")[1]) }.reduce(0, +)
-        XCTAssertGreaterThan(vertical, 120, "\(tag) two-finger drag: scrolled \(vertical) (\(scrolls.prefix(5)))")
+        XCTAssertLessThan(vertical, -120, "\(tag) two-finger drag: scrolled \(vertical) (\(scrolls.prefix(5)))")
         XCTAssertTrue(moves(new).isEmpty, "\(tag) two-finger drag moved the pointer (\(new))")
 
         // Pinch: zooms the view; the bar offers to reset it
