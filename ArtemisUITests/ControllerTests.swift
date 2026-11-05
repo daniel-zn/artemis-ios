@@ -43,8 +43,8 @@ final class ControllerTests: XCTestCase {
                                "-ArtemisDemoGamepad", script] + extra
         app.launch()
         XCUIDevice.shared.orientation = orientation
-        XCTAssertTrue(app.buttons["computer.ENCHILADA"].waitForExistence(timeout: 15))
-        app.buttons["computer.ENCHILADA"].tap()
+        XCTAssertTrue(app.buttons["computer.WORKSTATION"].waitForExistence(timeout: 15))
+        app.buttons["computer.WORKSTATION"].tap()
         XCTAssertTrue(app.buttons["game.Desktop"].waitForExistence(timeout: 10))
         app.buttons["game.Desktop"].tap()
         let desktop = app.otherElements["desktop"]
@@ -124,8 +124,8 @@ final class ControllerTests: XCTestCase {
                                "-ArtemisGamepadMouse", "YES", "-ArtemisDemoController", script]
         app.launch()
         XCUIDevice.shared.orientation = orientation
-        XCTAssertTrue(app.buttons["computer.ENCHILADA"].waitForExistence(timeout: 15))
-        app.buttons["computer.ENCHILADA"].tap()
+        XCTAssertTrue(app.buttons["computer.WORKSTATION"].waitForExistence(timeout: 15))
+        app.buttons["computer.WORKSTATION"].tap()
         XCTAssertTrue(app.buttons["game.Desktop"].waitForExistence(timeout: 10))
         app.buttons["game.Desktop"].tap()
         let desktop = app.otherElements["desktop"]

@@ -694,9 +694,9 @@ final class DesktopTests: XCTestCase {
                                "-ArtemisShowControlBar", "YES", "-ArtemisBarCenter", "{0.5, 0.92}", "-ArtemisGamepadBarCenter2", ""] + extra
         app.launch()
         XCUIDevice.shared.orientation = orientation
-        let enchilada = app.buttons["computer.ENCHILADA"]
-        XCTAssertTrue(enchilada.waitForExistence(timeout: 15))
-        enchilada.tap()
+        let workstation = app.buttons["computer.WORKSTATION"]
+        XCTAssertTrue(workstation.waitForExistence(timeout: 15))
+        workstation.tap()
         let desktopApp = app.buttons["game.Desktop"]
         XCTAssertTrue(desktopApp.waitForExistence(timeout: 10))
         desktopApp.tap()
@@ -973,7 +973,7 @@ final class DesktopTests: XCTestCase {
         app.terminate()
     }
 
-    /// Daniel's large text: the bar and the key row still fit.
+    /// Large text: the bar and the key row still fit.
     private func largeText(orientation: UIDeviceOrientation, name: String) {
         let tag = "\(appearance)-\(name)-AX5-desktop"
         let (app, desktop) = connect(size: "UICTContentSizeCategoryAccessibilityXXXL", orientation: orientation)

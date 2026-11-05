@@ -71,7 +71,7 @@ Wake-on-LAN sends the magic packet for the PC's MAC address (`Limelight/Network/
 times, on ports 9, 7, 47009 and Moonlight's ports:
 
 - **Unicast** to every address Artemis knows for the PC (its LAN address, the active, manual, external and IPv6
-  ones). It reaches a sleeping PC whose network adapter answers ARP for it (Windows' ARP offload; Enchilada's Intel
+  ones). It reaches a sleeping PC whose network adapter answers ARP for it (Windows' ARP offload; an Intel
   I219-V has it on, with Wake on Magic Packet) or whose address the iPhone still has cached.
 - **Broadcast** to 255.255.255.255 and each local network's broadcast address. Since iOS 14.5 that needs the
   restricted entitlement `com.apple.developer.networking.multicast`, which Artemis has (below). If a broadcast

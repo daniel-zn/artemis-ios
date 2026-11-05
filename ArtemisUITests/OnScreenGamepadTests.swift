@@ -150,7 +150,7 @@ final class OnScreenGamepadTests: XCTestCase {
         app.terminate()
     }
 
-    /// Daniel's large text: the bar, with the controller button, still fits; the gamepad too.
+    /// Large text: the bar, with the controller button, still fits; the gamepad too.
     func testGamepadLargeText() {
         for (orientation, name) in [(UIDeviceOrientation.portrait, "portrait"), (.landscapeLeft, "landscape")] {
             let tag = "\(appearance)-\(name)-AX5-gamepad"
@@ -320,9 +320,9 @@ final class OnScreenGamepadTests: XCTestCase {
                                "-ArtemisShowControlBar", "YES", "-ArtemisBarCenter", "{0.5, 0.92}", "-ArtemisGamepadBarCenter2", ""]
         app.launch()
         XCUIDevice.shared.orientation = .landscapeLeft
-        let enchilada = app.buttons["computer.ENCHILADA"]
-        XCTAssertTrue(enchilada.waitForExistence(timeout: 15))
-        enchilada.tap()
+        let workstation = app.buttons["computer.WORKSTATION"]
+        XCTAssertTrue(workstation.waitForExistence(timeout: 15))
+        workstation.tap()
         XCTAssertTrue(app.buttons["game.Desktop"].waitForExistence(timeout: 10))
         sleep(1)
         XCTAssertEqual(app.searchFields.count, 0, "\(tag): the apps have a search field")
@@ -722,9 +722,9 @@ final class OnScreenGamepadTests: XCTestCase {
                                "-ArtemisShowControlBar", "YES", "-ArtemisBarCenter", "{0.5, 0.92}", "-ArtemisGamepadBarCenter2", ""] + extra
         app.launch()
         XCUIDevice.shared.orientation = orientation
-        let enchilada = app.buttons["computer.ENCHILADA"]
-        XCTAssertTrue(enchilada.waitForExistence(timeout: 15))
-        enchilada.tap()
+        let workstation = app.buttons["computer.WORKSTATION"]
+        XCTAssertTrue(workstation.waitForExistence(timeout: 15))
+        workstation.tap()
         let desktopApp = app.buttons["game.Desktop"]
         XCTAssertTrue(desktopApp.waitForExistence(timeout: 10))
         desktopApp.tap()

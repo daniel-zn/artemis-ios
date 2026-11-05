@@ -92,7 +92,7 @@ for appearance in ${APPEARANCES:-light dark}; do
     "") ONLY_ARGS=(-only-testing:ArtemisUITests/ScreenshotTests -only-testing:ArtemisUITests/DesktopTests
                    -only-testing:ArtemisUITests/ComputerTests -only-testing:ArtemisUITests/ControllerTests
                    -only-testing:ArtemisUITests/OnScreenGamepadTests -only-testing:ArtemisUITests/HomeScreenIconTests
-                   -only-testing:ArtemisUITests/MicrophoneTests) ;;
+                   -only-testing:ArtemisUITests/MicrophoneTests -only-testing:ArtemisUITests/TryDemoTests) ;;
     *) ONLY_ARGS=(-only-testing:"ArtemisUITests/ScreenshotTests/$ONLY") ;;
   esac; fi
   TEST_RUNNER_ARTEMIS_APPEARANCE="$appearance" TEST_RUNNER_ARTEMIS_SHOT_DIR="$OUT/shots" \

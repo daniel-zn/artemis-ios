@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<!-- No debugger on launch or test (debugEnabled: false in Daniel's other apps). -->
+<!-- No debugger on launch or test (debugEnabled: false, as in the author's other apps). -->
 <Scheme
    LastUpgradeVersion = "2700"
    version = "1.7">

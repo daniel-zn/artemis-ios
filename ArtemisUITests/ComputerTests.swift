@@ -29,7 +29,7 @@ final class ComputerTests: XCTestCase {
                                // Where the bar was left by another test doesn't carry over
                                "-ArtemisBarCenter", "{0.5, 0.92}", "-ArtemisGamepadBarCenter2", ""] + arguments
         app.launch()
-        XCTAssertTrue(app.buttons["computer.ENCHILADA"].waitForExistence(timeout: 15), "no demo PCs")
+        XCTAssertTrue(app.buttons["computer.WORKSTATION"].waitForExistence(timeout: 15), "no demo PCs")
         return app
     }
 
@@ -207,29 +207,29 @@ final class ComputerTests: XCTestCase {
     /// instead of asking for a PIN. A wake that doesn't bring it up says so.
     func testSleepingPCStaysPaired() {
         let app = launch(["-ArtemisDemoSleep", "YES", "-ArtemisDemoWakeDelay", "9999", "-ArtemisWakeTimeout", "6"])
-        let enchilada = app.buttons["computer.ENCHILADA"]
+        let workstation = app.buttons["computer.WORKSTATION"]
         var seen: [String] = []
         // Several of its polls (one a second), each label it shows on the way
         let end = Date().addingTimeInterval(7)
         while Date() < end {
-            let label = enchilada.label
+            let label = workstation.label
             if seen.last != label { seen.append(label) }
             usleep(200_000)
         }
         XCTAssertFalse(seen.contains { $0.contains("Not paired") }, "a sleeping paired PC showed as not paired: \(seen)")
-        XCTAssertTrue(waitForLabel(enchilada, contains: "Offline · Tap to wake", timeout: 3), "status: \(enchilada.label) (\(seen))")
+        XCTAssertTrue(waitForLabel(workstation, contains: "Offline · Tap to wake", timeout: 3), "status: \(workstation.label) (\(seen))")
         shot("\(appearance)-portrait-L-sleep-1-offline")
 
-        enchilada.tap()
-        XCTAssertTrue(waitForLabel(enchilada, contains: "Waking up", timeout: 3), "no Waking up (\(enchilada.label))")
+        workstation.tap()
+        XCTAssertTrue(waitForLabel(workstation, contains: "Waking up", timeout: 3), "no Waking up (\(workstation.label))")
         XCTAssertFalse(app.staticTexts["pairing.pin"].waitForExistence(timeout: 2), "a tap on a sleeping paired PC asked to pair")
         shot("\(appearance)-portrait-L-sleep-2-waking")
         let alert = app.alerts.firstMatch
         XCTAssertTrue(alert.waitForExistence(timeout: 15), "no message after the wake timed out")
-        XCTAssertTrue(alert.label.contains("Couldn't Wake ENCHILADA"), "alert: \(alert.label)")
+        XCTAssertTrue(alert.label.contains("Couldn't Wake WORKSTATION"), "alert: \(alert.label)")
         shot("\(appearance)-portrait-L-sleep-3-couldnt-wake")
         alert.buttons["OK"].tap()
-        XCTAssertTrue(waitForLabel(enchilada, contains: "Offline · Tap to wake", timeout: 3), "status: \(enchilada.label)")
+        XCTAssertTrue(waitForLabel(workstation, contains: "Offline · Tap to wake", timeout: 3), "status: \(workstation.label)")
         XCTAssertFalse(app.staticTexts["pairing.pin"].exists, "the PIN sheet came up")
         app.terminate()
     }
@@ -250,8 +250,8 @@ final class ComputerTests: XCTestCase {
             let tag = "\(appearance)-\(name)"
             let app = launch(["-ArtemisNoAnimations", "YES"], size: size)
             XCUIDevice.shared.orientation = orientation
-            let enchilada = app.buttons["computer.ENCHILADA"]
-            let rename = openMenu(enchilada, item: "Rename…", in: app)
+            let workstation = app.buttons["computer.WORKSTATION"]
+            let rename = openMenu(workstation, item: "Rename…", in: app)
             XCTAssertTrue(rename.exists, "\(tag): no Rename…")
             XCTAssertTrue(menuItem(app, "Get Info").exists, "\(tag): no Get Info")
             XCTAssertTrue(menuItem(app, "Test Network…").exists, "\(tag): no Test Network…")
@@ -267,7 +267,7 @@ final class ComputerTests: XCTestCase {
             XCTAssertTrue(app.buttons["info.done"].waitForExistence(timeout: 5), "\(tag): Get Info didn't open")
             sleep(1)
             shot("\(tag)-parity-3-get-info")
-            for text in ["PC's own name", "ENCHILADA", "a8:a1:59:12:34:56", "Paired", "47984", "127.0.0.1"] {
+            for text in ["PC's own name", "WORKSTATION", "02:00:5e:12:34:56", "Paired", "47984", "127.0.0.1"] {
                 let value = app.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", text)).firstMatch
                 XCTAssertTrue(reveal(value, in: app), "\(tag): Get Info has no \(text)")
             }
@@ -276,7 +276,7 @@ final class ComputerTests: XCTestCase {
             // Back to the PC's own name
             openMenu(office, item: "Rename…", in: app).tap()
             self.rename(to: "", in: app, tag)
-            XCTAssertTrue(enchilada.waitForExistence(timeout: 5), "\(tag): the empty name didn't restore ENCHILADA")
+            XCTAssertTrue(workstation.waitForExistence(timeout: 5), "\(tag): the empty name didn't restore WORKSTATION")
             app.terminate()
             XCUIDevice.shared.orientation = .portrait
         }
@@ -287,8 +287,8 @@ final class ComputerTests: XCTestCase {
     func testConnectAutomatically() {
         let tag = "\(appearance)-portrait-L"
         let app = launch()
-        let enchilada = app.buttons["computer.ENCHILADA"]
-        enchilada.tap()
+        let workstation = app.buttons["computer.WORKSTATION"]
+        workstation.tap()
         let desktopApp = app.buttons["game.Desktop"]
         XCTAssertTrue(desktopApp.waitForExistence(timeout: 10))
         let toggle = openMenu(desktopApp, item: "Connect Automatically When Opening PC", in: app)
@@ -301,13 +301,13 @@ final class ComputerTests: XCTestCase {
         shot("\(tag)-parity-5-connects-automatically")
         app.navigationBars.buttons.firstMatch.tap()
 
-        enchilada.tap()
+        workstation.tap()
         XCTAssertTrue(app.otherElements["desktop"].waitForExistence(timeout: 10), "opening the PC didn't connect")
         disconnect(app)
         XCTAssertTrue(desktopApp.waitForExistence(timeout: 10), "didn't return to the apps")
         app.navigationBars.buttons.firstMatch.tap()
 
-        openMenu(enchilada, item: "View All Apps, Including Hidden", in: app).tap()
+        openMenu(workstation, item: "View All Apps, Including Hidden", in: app).tap()
         XCTAssertTrue(app.buttons["game.Old Virtual Display"].waitForExistence(timeout: 10), "hidden apps don't show")
         sleep(2)
         XCTAssertFalse(app.otherElements["desktop"].exists, "View All Apps connected by itself")
@@ -317,7 +317,7 @@ final class ComputerTests: XCTestCase {
     /// Settings › Host PC › Stop the app on the PC after a session.
     func testEndAppAfterSession() {
         let app = launch(["-ArtemisQuitAppAfterSession", "YES"])
-        app.buttons["computer.ENCHILADA"].tap()
+        app.buttons["computer.WORKSTATION"].tap()
         let desktopApp = app.buttons["game.Desktop"]
         XCTAssertTrue(desktopApp.waitForExistence(timeout: 10))
         XCTAssertTrue(app.descendants(matching: .any)["game.running"].exists, "Desktop isn't active to begin with")
@@ -378,12 +378,12 @@ final class ComputerTests: XCTestCase {
 
     // MARK: Crashes
 
-    /// Daniel's crash (build 1267): long-pressing Apollo's own apps (Steam Big Picture, Virtual
+    /// A reported crash (build 1267): long-pressing Apollo's own apps (Steam Big Picture, Virtual
     /// Display), whose artwork arrives while the menu is open. The menu's artwork preview is
     /// drawn outside the list and lost the store when it re-rendered.
     func testLongPressAppsWhileArtworkArrives() {
         let app = launch()
-        app.buttons["computer.ENCHILADA"].tap()
+        app.buttons["computer.WORKSTATION"].tap()
         XCTAssertTrue(app.buttons["game.Desktop"].waitForExistence(timeout: 10))
         for name in ["Steam Big Picture", "Virtual Display", "Desktop"] {
             let row = app.buttons["game.\(name)"]
@@ -453,7 +453,7 @@ final class ComputerTests: XCTestCase {
             let tag = "\(appearance)-\(name)"
             let app = launch()
             XCUIDevice.shared.orientation = orientation
-            app.buttons["computer.ENCHILADA"].tap()
+            app.buttons["computer.WORKSTATION"].tap()
             let active = app.buttons["game.Desktop"]
             let inactive = app.buttons["game.File Explorer"]
             XCTAssertTrue(active.waitForExistence(timeout: 10) && inactive.waitForExistence(timeout: 5), "\(tag): the apps didn't open")

@@ -28,7 +28,7 @@ final class MicrophoneTests: XCTestCase {
         app.launchArguments = ["-ArtemisDemo", "YES", "-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryL",
                                "-ArtemisShowControlBar", "YES", "-ArtemisBarCenter", "{0.5, 0.92}", "-ArtemisGamepadBarCenter2", ""] + arguments
         app.launch()
-        XCTAssertTrue(app.buttons["computer.ENCHILADA"].waitForExistence(timeout: 15), "no demo PCs")
+        XCTAssertTrue(app.buttons["computer.WORKSTATION"].waitForExistence(timeout: 15), "no demo PCs")
         return app
     }
 
@@ -218,8 +218,8 @@ final class MicrophoneTests: XCTestCase {
     // MARK: Session
 
     private func connect(_ app: XCUIApplication) -> XCUIElement {
-        let enchilada = app.buttons["computer.ENCHILADA"]
-        enchilada.tap()
+        let workstation = app.buttons["computer.WORKSTATION"]
+        workstation.tap()
         let desktopApp = app.buttons["game.Desktop"]
         XCTAssertTrue(desktopApp.waitForExistence(timeout: 10))
         desktopApp.tap()
@@ -271,7 +271,7 @@ final class MicrophoneTests: XCTestCase {
             XCTAssertTrue(wait(3) { self.micState(desktop).packets > resumed + 20 }, "\(tag): unmuting didn't resume")
 
             app.buttons["bar.disconnect"].tap()
-            XCTAssertTrue(app.buttons["computer.ENCHILADA"].waitForExistence(timeout: 10) || app.buttons["game.Desktop"].waitForExistence(timeout: 5))
+            XCTAssertTrue(app.buttons["computer.WORKSTATION"].waitForExistence(timeout: 10) || app.buttons["game.Desktop"].waitForExistence(timeout: 5))
             app.terminate()
             XCUIDevice.shared.orientation = .portrait
         }

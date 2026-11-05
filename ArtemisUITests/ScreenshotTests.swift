@@ -10,7 +10,7 @@
 import XCTest
 
 final class ScreenshotTests: XCTestCase {
-    /// The default size and the largest accessibility size (Daniel's phone uses large text).
+    /// The default size and the largest accessibility size.
     private let textSizes = ["L": "UICTContentSizeCategoryL", "AX5": "UICTContentSizeCategoryAccessibilityXXXL"]
 
     private var appearance: String {
@@ -126,21 +126,21 @@ final class ScreenshotTests: XCTestCase {
                 XCUIDevice.shared.orientation = orientation
 
                 // Computers: a paired PC, an offline one, one not paired
-                let enchilada = app.buttons["computer.ENCHILADA"]
-                XCTAssertTrue(enchilada.waitForExistence(timeout: 15), "\(tag): no demo PCs")
-                for name in ["ENCHILADA", "Living Room PC", "STUDIO"] {
+                let workstation = app.buttons["computer.WORKSTATION"]
+                XCTAssertTrue(workstation.waitForExistence(timeout: 15), "\(tag): no demo PCs")
+                for name in ["WORKSTATION", "Living Room PC", "STUDIO"] {
                     let row = app.buttons["computer.\(name)"]
                     XCTAssertTrue(reveal(row, in: app, timeout: 1), "\(tag): no \(name)")
                     assertOnScreen(row, in: app, tag)
                 }
-                reveal(enchilada, in: app, timeout: 1)
+                reveal(workstation, in: app, timeout: 1)
                 XCTAssertTrue(app.buttons["computers.add"].isHittable, "\(tag): no + button")
                 XCTAssertTrue(app.buttons["computers.settings"].isHittable, "\(tag): no Settings button")
                 sleep(1)
                 shot(app, "\(tag)-1-computers")
 
                 // Apps: artwork rows, Desktop active with Resume / Stop
-                enchilada.tap()
+                workstation.tap()
                 let running = app.buttons["game.Desktop"]
                 XCTAssertTrue(running.waitForExistence(timeout: 10), "\(tag): the apps didn't open")
                 XCTAssertTrue(reveal(app.buttons["game.end"], in: app, timeout: 1), "\(tag): no Stop button")
@@ -158,7 +158,7 @@ final class ScreenshotTests: XCTestCase {
                 app.buttons["game.end"].tap()
                 let endAlert = app.alerts.firstMatch
                 XCTAssertTrue(endAlert.buttons["Stop"].waitForExistence(timeout: 5), "\(tag): no Stop confirmation")
-                XCTAssertTrue(endAlert.label.contains("Stop Desktop on ENCHILADA?"), "\(tag): confirmation title \(endAlert.label)")
+                XCTAssertTrue(endAlert.label.contains("Stop Desktop on WORKSTATION?"), "\(tag): confirmation title \(endAlert.label)")
                 sleep(1)
                 shot(app, "\(tag)-3-stop")
                 dismissDialog(app)
@@ -262,9 +262,9 @@ final class ScreenshotTests: XCTestCase {
     func testStreamStartsAndReturns() {
         let app = launch(size: "L", arguments: ["-ArtemisDemoRealStream", "YES"])
         XCUIDevice.shared.orientation = .portrait
-        let enchilada = app.buttons["computer.ENCHILADA"]
-        XCTAssertTrue(enchilada.waitForExistence(timeout: 15))
-        enchilada.tap()
+        let workstation = app.buttons["computer.WORKSTATION"]
+        XCTAssertTrue(workstation.waitForExistence(timeout: 15))
+        workstation.tap()
         let blender = app.buttons["game.Blender"]
         XCTAssertTrue(blender.waitForExistence(timeout: 10))
         blender.tap()
