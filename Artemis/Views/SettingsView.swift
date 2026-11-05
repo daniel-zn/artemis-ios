@@ -444,8 +444,18 @@ struct SettingsPage: View {
         Section {
             LabeledContent("Version", value: Self.version)
                 .accessibilityIdentifier("settings.version")
+            Link(destination: Links.sourceCode) {
+                Label("Source Code", systemImage: "chevron.left.forwardslash.chevron.right")
+            }
+            .accessibilityIdentifier("settings.sourceCode")
+            Link(destination: Links.license) {
+                Label("License (GPLv3)", systemImage: "doc.text")
+            }
         } header: {
             Note("About")
+        } footer: {
+            Note("Artemis is based on Moonlight by the Moonlight developers. It is free software: you can redistribute it and change it under the terms of the GNU General Public License, version 3. It comes with no warranty.")
+                .accessibilityIdentifier("settings.license")
         }
         Section {
             Link(destination: Links.setupGuide) {
@@ -456,8 +466,6 @@ struct SettingsPage: View {
             }
         } header: {
             Note("Help")
-        } footer: {
-            Note("Artemis is based on Moonlight, an open-source client for Sunshine and Apollo.")
         }
     }
 

@@ -2,7 +2,8 @@
 //  DemoData.swift
 //  Artemis
 //
-//  Stand-in PCs for screenshots and UI tests (launch argument -ArtemisDemo YES):
+//  Stand-in PCs for screenshots, UI tests (launch argument -ArtemisDemo YES) and Try the Demo
+//  on the empty Computers screen (for someone without a PC at hand, App Review too):
 //  a paired PC with apps, one active; an offline PC; a PC that isn't paired.
 //  Connecting opens a picture of a desktop that records the input (DemoDesktopViewController);
 //  with -ArtemisDemoRealStream YES it opens the real stream screen, which can't reach the PC.
@@ -13,8 +14,14 @@ import UIKit
 
 enum DemoData {
     static var isEnabled: Bool {
-        UserDefaults.standard.bool(forKey: "ArtemisDemo")
+        UserDefaults.standard.bool(forKey: "ArtemisDemo") || isTrying
     }
+
+    /// The demo opened with Try the Demo on the empty Computers screen, until Exit Demo.
+    static var isTrying = false
+
+    /// The demo's paired PC with apps.
+    static let workstationName = "WORKSTATION"
 
     static var usesRealStream: Bool {
         UserDefaults.standard.bool(forKey: "ArtemisDemoRealStream")
@@ -47,7 +54,7 @@ enum DemoData {
         isEnabled && UserDefaults.standard.bool(forKey: "ArtemisNoAnimations")
     }
 
-    /// ENCHILADA goes to sleep a moment after launch (-ArtemisDemoSleep YES).
+    /// WORKSTATION goes to sleep a moment after launch (-ArtemisDemoSleep YES).
     static var sleepsAfterLaunch: Bool {
         UserDefaults.standard.bool(forKey: "ArtemisDemoSleep")
     }
@@ -101,20 +108,20 @@ enum DemoData {
     }
 
     static func makeHosts() -> [TemporaryHost] {
-        let enchilada = host("ENCHILADA", uuid: "demo-enchilada", state: .online, paired: true, mac: "a8:a1:59:12:34:56")
+        let workstation = host(workstationName, uuid: "demo-workstation", state: .online, paired: true, mac: "02:00:5e:12:34:56")
         let games: [(String, String, Bool)] = [
             ("1", "Desktop", false), ("2", "Visual Studio Code", false), ("3", "Blender", false),
             ("4", "Photoshop", false), ("5", "Terminal", false), ("6", "File Explorer", false),
             ("7", "Steam Big Picture", false), ("8", "Old Virtual Display", true), ("9", "Virtual Display", false),
         ]
-        enchilada.appList = Set(games.map { app($0.0, $0.1, hidden: $0.2, host: enchilada) })
-        enchilada.currentGame = "1"
+        workstation.appList = Set(games.map { app($0.0, $0.1, hidden: $0.2, host: workstation) })
+        workstation.currentGame = "1"
 
-        let livingRoom = host("Living Room PC", uuid: "demo-living-room", state: .offline, paired: true, mac: "a8:a1:59:65:43:21")
+        let livingRoom = host("Living Room PC", uuid: "demo-living-room", state: .offline, paired: true, mac: "02:00:5e:65:43:21")
         livingRoom.appList = Set([app("1", "Desktop", hidden: false, host: livingRoom)])
 
         let studio = host("STUDIO", uuid: "demo-studio", state: .online, paired: false, mac: nil)
-        return [enchilada, livingRoom, studio]
+        return [workstation, livingRoom, studio]
     }
 
     private static func host(_ name: String, uuid: String, state: State, paired: Bool, mac: String?) -> TemporaryHost {

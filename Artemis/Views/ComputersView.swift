@@ -60,7 +60,21 @@ struct ComputersView: View {
                 } actions: {
                     Button("Add PC Manually") { showingAdd = true }
                         .buttonStyle(.glassProminent)
+                    // No PC yet (or none at hand): the demo PCs and their desktop, nothing on the network
+                    if store.switchDemo != nil {
+                        Button("Try the Demo") { store.switchDemo?(true) }
+                            .artemisFont(.callout)
+                            .accessibilityIdentifier("computers.tryDemo")
+                    }
                 }
+            }
+        }
+        .safeAreaInset(edge: .bottom) {
+            if store.isTryingDemo {
+                Button("Exit Demo") { store.switchDemo?(false) }
+                    .buttonStyle(.glass)
+                    .accessibilityIdentifier("computers.exitDemo")
+                    .padding(.bottom, 8)
             }
         }
         .navigationTitle("Computers")

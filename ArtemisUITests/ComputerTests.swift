@@ -360,7 +360,7 @@ final class ComputerTests: XCTestCase {
     }
 
     /// Settings › General shows Artemis's own version (1.0, not upstream Moonlight's 9.0.2)
-    /// and the build number.
+    /// and the build number, and the GPL notice with the Moonlight credit and the source link.
     func testVersionRow() {
         let app = launch()
         app.buttons["computers.settings"].tap()
@@ -372,6 +372,10 @@ final class ComputerTests: XCTestCase {
         let text = [row.label, row.value as? String ?? ""].joined(separator: " ")
         XCTAssertNotNil(text.range(of: #"1\.0 \(\d+\)"#, options: .regularExpression), "Version reads \(text)")
         XCTAssertFalse(text.contains("9.0"), "still upstream's version: \(text)")
+        XCTAssertTrue(app.descendants(matching: .any)["settings.sourceCode"].firstMatch.exists, "no Source Code link")
+        let license = app.descendants(matching: .any)["settings.license"].firstMatch
+        XCTAssertTrue(license.exists, "no license notice")
+        XCTAssertTrue(license.label.contains("GNU General Public License") && license.label.contains("Moonlight"), "notice: \(license.label)")
         shot("\(appearance)-portrait-L-version")
         app.terminate()
     }

@@ -149,6 +149,18 @@
               "ArtemisUITests/LiveMicTests.swift"
             ],
             "tests": []
+          },
+          {
+            "paths": [
+              "Artemis/App/SceneDelegate.swift",
+              "Artemis/Views/ComputersView.swift",
+              "Artemis/Model/DemoData.swift",
+              "ArtemisUITests/TryDemoTests.swift"
+            ],
+            "tests": [
+              "TryDemoTests",
+              "ScreenshotTests"
+            ]
           }
         ]
       }

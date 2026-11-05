@@ -42,6 +42,10 @@ final class ComputerStore {
     // MARK: Plumbing
 
     @ObservationIgnored let isDemo: Bool
+    /// The demo someone opened with Try the Demo (it has Exit Demo).
+    @ObservationIgnored let isTryingDemo: Bool
+    /// Opens (true) or leaves (false) the demo in place of this store's PCs.
+    @ObservationIgnored var switchDemo: ((Bool) -> Void)?
     @ObservationIgnored private var hosts: [String: TemporaryHost] = [:]
     @ObservationIgnored private var discovery: DiscoveryManager?
     @ObservationIgnored private var assetManager: AppAssetManager?
@@ -65,8 +69,9 @@ final class ComputerStore {
     /// Presents the stream view; calls the closure once it has been dismissed.
     @ObservationIgnored var presentStream: ((StreamConfiguration, @escaping (_ connected: Bool) -> Void) -> Void)?
 
-    init(demo: Bool) {
+    init(demo: Bool, trying: Bool = false) {
         isDemo = demo
+        isTryingDemo = trying
         callbacks = HostCallbacks(store: self)
         // The demo keeps these for the session only, like the rest of its PCs
         if !demo {
@@ -92,7 +97,7 @@ final class ComputerStore {
         if isDemo {
             for host in DemoData.makeHosts() {
                 hosts[host.uuid] = host
-                if DemoData.sleepsAfterLaunch && host.name == "ENCHILADA" {
+                if DemoData.sleepsAfterLaunch && host.name == DemoData.workstationName {
                     DemoData.simulateSleep(host)
                 }
             }
@@ -108,12 +113,16 @@ final class ComputerStore {
         assetManager = AppAssetManager(callback: callbacks)
         opQueue.maxConcurrentOperationCount = 1
 
-        let saved = (DataManager().getHosts() as? [TemporaryHost]) ?? []
+        // UI tests of the empty screen (-ArtemisTestNoPCs YES): no saved PCs, no discovery
+        let noPCs = UserDefaults.standard.bool(forKey: "ArtemisTestNoPCs")
+        let saved = noPCs ? [] : (DataManager().getHosts() as? [TemporaryHost]) ?? []
         for host in saved {
             ArtemisBridge.prepareSavedHost(host)
             hosts[host.uuid] = host
         }
-        discovery = DiscoveryManager(hosts: Array(hosts.values), andCallback: callbacks)
+        if !noPCs {
+            discovery = DiscoveryManager(hosts: Array(hosts.values), andCallback: callbacks)
+        }
         rebuild()
         updateShortcuts()
         preloadBoxArt()
