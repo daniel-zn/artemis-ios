@@ -188,13 +188,15 @@ final class ComputerTests: XCTestCase {
 
     /// A PC that never comes up: back to Offline after the timeout, with a message.
     func testWakeTimesOut() {
-        let app = launch(["-ArtemisDemoWakeDelay", "9999", "-ArtemisWakeTimeout", "5"])
+        // The wake's time limit is longer than a tap can take to settle on a loaded Mac (a 5 s
+        // one ran out before the tap returned, so "Waking up" was already over)
+        let app = launch(["-ArtemisDemoWakeDelay", "9999", "-ArtemisWakeTimeout", "15"])
         let livingRoom = app.buttons["computer.Living Room PC"]
         XCTAssertTrue(livingRoom.waitForExistence(timeout: 5))
         livingRoom.tap()
-        XCTAssertTrue(waitForLabel(livingRoom, contains: "Waking up", timeout: 3), "no Waking up (\(livingRoom.label))")
+        XCTAssertTrue(waitForLabel(livingRoom, contains: "Waking up", timeout: 5), "no Waking up (\(livingRoom.label))")
         let alert = app.alerts.firstMatch
-        XCTAssertTrue(alert.waitForExistence(timeout: 15), "no message after the wake timed out")
+        XCTAssertTrue(alert.waitForExistence(timeout: 30), "no message after the wake timed out")
         XCTAssertTrue(alert.label.contains("Couldn't Wake Living Room PC"), "alert: \(alert.label)")
         shot("\(appearance)-portrait-L-wake-5-timeout")
         alert.buttons["OK"].tap()
@@ -382,7 +384,7 @@ final class ComputerTests: XCTestCase {
     /// none) stays paired: "Offline · Tap to wake", never "Not paired", and a tap wakes it
     /// instead of asking for a PIN. A wake that doesn't bring it up says so.
     func testSleepingPCStaysPaired() {
-        let app = launch(["-ArtemisDemoSleep", "YES", "-ArtemisDemoWakeDelay", "9999", "-ArtemisWakeTimeout", "6"])
+        let app = launch(["-ArtemisDemoSleep", "YES", "-ArtemisDemoWakeDelay", "9999", "-ArtemisWakeTimeout", "15"])
         let workstation = app.buttons["computer.WORKSTATION"]
         var seen: [String] = []
         // Several of its polls (one a second), each label it shows on the way
@@ -397,11 +399,11 @@ final class ComputerTests: XCTestCase {
         shot("\(appearance)-portrait-L-sleep-1-offline")
 
         workstation.tap()
-        XCTAssertTrue(waitForLabel(workstation, contains: "Waking up", timeout: 3), "no Waking up (\(workstation.label))")
+        XCTAssertTrue(waitForLabel(workstation, contains: "Waking up", timeout: 5), "no Waking up (\(workstation.label))")
         XCTAssertFalse(app.staticTexts["pairing.pin"].waitForExistence(timeout: 2), "a tap on a sleeping paired PC asked to pair")
         shot("\(appearance)-portrait-L-sleep-2-waking")
         let alert = app.alerts.firstMatch
-        XCTAssertTrue(alert.waitForExistence(timeout: 15), "no message after the wake timed out")
+        XCTAssertTrue(alert.waitForExistence(timeout: 30), "no message after the wake timed out")
         XCTAssertTrue(alert.label.contains("Couldn't Wake WORKSTATION"), "alert: \(alert.label)")
         shot("\(appearance)-portrait-L-sleep-3-couldnt-wake")
         alert.buttons["OK"].tap()
