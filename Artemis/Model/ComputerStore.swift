@@ -20,6 +20,8 @@ final class ComputerStore {
     var path: [Route] = []
     /// A full-screen "working" card (connecting, stopping an app, testing the network).
     var busyMessage: String?
+    /// The PC being opened under the "Connecting…" card; its Cancel stops it (cancelConnecting).
+    private(set) var connecting: ConnectAttempt?
     var alert: AlertInfo?
     var pairing: PairingInfo?
     /// Hosts whose apps list shows hidden apps too ("Show All Apps, Including Hidden").
@@ -312,6 +314,15 @@ final class ComputerStore {
         }
 
         if isDemo {
+            // A demo PC that takes a while to answer (-ArtemisDemoConnectDelay), as a real one can
+            if userInitiated && DemoData.connectDelay > 0 {
+                let attempt = beginConnecting(host)
+                DispatchQueue.main.asyncAfter(deadline: .now() + DemoData.connectDelay) { [weak self] in
+                    guard let self, self.finishConnecting(attempt) else { return }
+                    self.openDemo(host, userInitiated: userInitiated, autoLaunch: autoLaunch)
+                }
+                return
+            }
             openDemo(host, userInitiated: userInitiated, autoLaunch: autoLaunch)
             return
         }
@@ -324,29 +335,28 @@ final class ComputerStore {
             return
         }
 
-        if userInitiated {
-            busyMessage = "Connecting to \(host.name)…"
-        }
+        // A refresh (no card) can't be cancelled, and doesn't end one that's showing
+        let attempt = userInitiated ? beginConnecting(host) : ConnectAttempt()
         let discovery = self.discovery
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
             // Wait for the PC's status to be known
             var waited = 0
-            while host.state == .unknown && waited < 20 {
+            while host.state == .unknown && waited < 20 && !attempt.isCancelled {
                 sleep(1)
                 waited += 1
             }
+            if attempt.isCancelled { return }
             if host.state != .online {
                 DispatchQueue.main.async {
-                    self?.busyMessage = nil
-                    self?.leaveGames(of: id)
+                    guard let self, self.finishConnecting(attempt) else { return }
+                    self.leaveGames(of: id)
                 }
                 return
             }
 
             if let error = ArtemisBridge.refreshServerInfo(for: host, discovery: discovery) {
                 DispatchQueue.main.async {
-                    guard let self else { return }
-                    self.busyMessage = nil
+                    guard let self, self.finishConnecting(attempt) else { return }
                     host.state = .offline
                     self.rebuild()
                     self.leaveGames(of: id)
@@ -358,10 +368,10 @@ final class ComputerStore {
                 return
             }
 
+            if attempt.isCancelled { return }
             if Self.isPaired(host) {
                 DispatchQueue.main.async {
-                    guard let self else { return }
-                    self.busyMessage = nil
+                    guard let self, self.finishConnecting(attempt) else { return }
                     self.rebuild()
                     if userInitiated || self.selectedHostID == id || self.path.isEmpty {
                         self.showGames(id, autoLaunch: autoLaunch)
@@ -371,18 +381,66 @@ final class ComputerStore {
             }
             else if userInitiated {
                 logInfo("Trying to pair")
-                DispatchQueue.main.async { self?.pairingHostID = id }
                 // Polling the server while pairing causes the server to screw up
                 discovery?.stopDiscoveryBlocking()
-                guard let self else { return }
-                let manager = PairManager(manager: HttpManager(host: host), clientCert: self.clientCert, callback: self.callbacks)
-                self.opQueue.addOperation(manager!)
+                DispatchQueue.main.async {
+                    guard let self else { return }
+                    // Cancelled while discovery stopped: it starts again, no pairing
+                    guard !attempt.isCancelled else {
+                        discovery?.startDiscovery()
+                        return
+                    }
+                    // The card stays (and can still be cancelled) until the PIN shows
+                    self.pairingHostID = id
+                    let manager = PairManager(manager: HttpManager(host: host), clientCert: self.clientCert, callback: self.callbacks)
+                    self.opQueue.addOperation(manager!)
+                }
             }
             else {
                 DispatchQueue.main.async {
-                    self?.busyMessage = nil
-                    self?.rebuild()
+                    guard let self, self.finishConnecting(attempt) else { return }
+                    self.rebuild()
                 }
+            }
+        }
+    }
+
+    /// Shows the "Connecting…" card for an open that Cancel can stop.
+    private func beginConnecting(_ host: TemporaryHost) -> ConnectAttempt {
+        let attempt = ConnectAttempt()
+        connecting?.cancel()
+        connecting = attempt
+        busyMessage = "Connecting to \(customNames[host.uuid] ?? host.name)…"
+        return attempt
+    }
+
+    /// An open's answer arrived (main thread): false when Cancel stopped it, and nothing more
+    /// happens. Otherwise its card goes (a refresh's answer leaves another open's card alone).
+    private func finishConnecting(_ attempt: ConnectAttempt) -> Bool {
+        if attempt.isCancelled { return false }
+        if connecting === attempt {
+            connecting = nil
+            busyMessage = nil
+        } else if connecting == nil {
+            busyMessage = nil
+        }
+        return true
+    }
+
+    /// Cancel on the "Connecting…" card: stops opening the PC (its status wait, the serverinfo
+    /// answer, pairing before the PIN shows) and stays where it was, without a message.
+    func cancelConnecting() {
+        guard let attempt = connecting else { return }
+        logInfo("Connecting cancelled")
+        attempt.cancel()
+        connecting = nil
+        busyMessage = nil
+        if pairingHostID != nil {
+            // The PIN hasn't shown yet: its callbacks find no pairing and do nothing
+            pairingHostID = nil
+            opQueue.cancelAllOperations()
+            if !isDemo {
+                discovery?.startDiscovery()
             }
         }
     }
@@ -448,6 +506,7 @@ final class ComputerStore {
 
     fileprivate func pairingStarted(pin: String) {
         guard let id = pairingHostID, let host = hosts[id] else { return }
+        connecting = nil
         busyMessage = nil
         pairing = PairingInfo(hostID: id, hostName: customNames[id] ?? host.name, pin: pin)
     }
@@ -456,6 +515,7 @@ final class ComputerStore {
         guard pairingHostID != nil else { return }
         pairingHostID = nil
         pairing = nil
+        connecting = nil
         busyMessage = nil
         discovery?.startDiscovery()
         alert = AlertInfo(title: "Pairing Failed", message: message, showsHelp: true)
@@ -465,6 +525,7 @@ final class ComputerStore {
         guard let id = pairingHostID, let host = hosts[id] else { return }
         pairingHostID = nil
         pairing = nil
+        connecting = nil
         busyMessage = nil
         if let serverCert {
             // Store the cert from pairing with the host
@@ -838,6 +899,17 @@ final class ComputerStore {
             pairingStarted(pin: "4821")
         }
     }
+}
+
+/// One open of a PC that the "Connecting…" card's Cancel can stop; the thread waiting for the
+/// PC checks it between steps.
+final class ConnectAttempt: @unchecked Sendable {
+    private let lock = NSLock()
+    private var cancelled = false
+
+    var isCancelled: Bool { lock.withLock { cancelled } }
+
+    func cancel() { lock.withLock { cancelled = true } }
 }
 
 private struct WakeAttempt {

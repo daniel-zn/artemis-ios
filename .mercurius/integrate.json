@@ -161,6 +161,17 @@
               "TryDemoTests",
               "ScreenshotTests"
             ]
+          },
+          {
+            "paths": [
+              "Artemis/Model/ComputerStore.swift",
+              "Artemis/Views/RootView.swift"
+            ],
+            "tests": [
+              "ComputerTests",
+              "TryDemoTests",
+              "ScreenshotTests/testStreamStartsAndReturns"
+            ]
           }
         ]
       }

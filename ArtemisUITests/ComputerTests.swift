@@ -202,6 +202,53 @@ final class ComputerTests: XCTestCase {
         app.terminate()
     }
 
+    /// Cancel on the "Connecting to WORKSTATION…" card (-ArtemisDemoConnectDelay: the PC takes
+    /// 8 s to answer, longer than a tap takes to settle on a loaded Mac): the card goes, the Computers list stays, and nothing opens or complains
+    /// once the PC would have answered. Opening it again still works.
+    func testCancelConnecting() {
+        let app = launch(["-ArtemisDemoConnectDelay", "8"])
+        let workstation = app.buttons["computer.WORKSTATION"]
+        let card = app.descendants(matching: .any)["busy"]
+        let cancel = app.buttons["busy.cancel"]
+        workstation.tap()
+        XCTAssertTrue(card.waitForExistence(timeout: 5), "no Connecting card")
+        XCTAssertTrue(cancel.waitForExistence(timeout: 3), "no Cancel on the Connecting card")
+        XCTAssertEqual(cancel.label, "Cancel")
+        shot("\(appearance)-portrait-L-connect-1-cancel")
+        cancel.tap()
+        XCTAssertTrue(card.waitForNonExistence(timeout: 3), "the card stayed after Cancel")
+        // Past the moment the PC answers: still on the Computers list, no apps, no message
+        XCTAssertFalse(app.buttons["game.Desktop"].waitForExistence(timeout: 10), "the PC opened after Cancel")
+        XCTAssertFalse(app.alerts.firstMatch.exists, "a message after Cancel: \(app.alerts.firstMatch.label)")
+        XCTAssertTrue(workstation.isHittable, "not back on the Computers list")
+
+        workstation.tap()
+        XCTAssertTrue(card.waitForExistence(timeout: 5), "no Connecting card the second time")
+        XCTAssertTrue(app.buttons["game.Desktop"].waitForExistence(timeout: 20), "the PC didn't open after a cancelled try")
+        XCTAssertFalse(card.exists, "the card stayed over the apps")
+        app.terminate()
+    }
+
+    /// A tap that woke the PC connects once it's up; that card has Cancel too, at the largest text
+    /// size, and Cancel leaves the PC online on the list without opening it.
+    func testCancelConnectingAfterWakeLargeText() {
+        let app = launch(["-ArtemisDemoWakeDelay", "1", "-ArtemisDemoConnectDelay", "8"],
+                         size: "UICTContentSizeCategoryAccessibilityXXXL")
+        let livingRoom = app.buttons["computer.Living Room PC"]
+        XCTAssertTrue(livingRoom.waitForExistence(timeout: 5))
+        livingRoom.tap()
+        let cancel = app.buttons["busy.cancel"]
+        XCTAssertTrue(cancel.waitForExistence(timeout: 10), "no Cancel on the card once the PC woke")
+        XCTAssertTrue(cancel.isHittable, "Cancel is off screen at the largest text size")
+        shot("\(appearance)-portrait-AX5-connect-2-cancel")
+        cancel.tap()
+        XCTAssertTrue(app.descendants(matching: .any)["busy"].waitForNonExistence(timeout: 3), "the card stayed after Cancel")
+        XCTAssertFalse(app.buttons["game.Desktop"].waitForExistence(timeout: 10), "the PC opened after Cancel")
+        XCTAssertFalse(app.alerts.firstMatch.exists, "a message after Cancel: \(app.alerts.firstMatch.label)")
+        XCTAssertTrue(waitForLabel(livingRoom, contains: "Online", timeout: 3), "status after Cancel: \(livingRoom.label)")
+        app.terminate()
+    }
+
     /// A paired PC that goes to sleep (-ArtemisDemoSleep: an answer over plain HTTP only, then
     /// none) stays paired: "Offline · Tap to wake", never "Not paired", and a tap wakes it
     /// instead of asking for a PIN. A wake that doesn't bring it up says so.

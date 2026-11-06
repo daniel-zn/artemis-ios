@@ -33,6 +33,12 @@ enum DemoData {
         UserDefaults.standard.object(forKey: "ArtemisDemoWakeDelay") == nil ? 3 : UserDefaults.standard.double(forKey: "ArtemisDemoWakeDelay")
     }
 
+    /// Seconds a demo PC takes to answer when it's opened, under the "Connecting…" card
+    /// (-ArtemisDemoConnectDelay; 0, the default, opens it at once).
+    static var connectDelay: Double {
+        max(0, UserDefaults.standard.double(forKey: "ArtemisDemoConnectDelay"))
+    }
+
     /// A woken demo PC comes up the way discovery sees a real one: its poll (on a background
     /// thread) changes the host's state and posts ArtemisHostUpdated.
     static func simulateWake(_ host: TemporaryHost) {

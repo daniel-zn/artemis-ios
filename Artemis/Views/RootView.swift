@@ -22,7 +22,7 @@ struct RootView: View {
         }
         .overlay {
             if let message = store.busyMessage {
-                BusyOverlay(message: message)
+                BusyOverlay(message: message, cancel: store.connecting == nil ? nil : { store.cancelConnecting() })
                     .transition(.opacity)
             }
         }
@@ -44,9 +44,11 @@ struct RootView: View {
     }
 }
 
-/// A "working on it" card over the whole screen; touches don't go through.
+/// A "working on it" card over the whole screen; touches don't go through. With `cancel`,
+/// it has a Cancel button (connecting to a PC).
 struct BusyOverlay: View {
     let message: String
+    var cancel: (() -> Void)?
 
     var body: some View {
         ZStack {
@@ -59,13 +61,21 @@ struct BusyOverlay: View {
                 Text(message)
                     .artemisFont(.headline)
                     .multilineTextAlignment(.center)
+                if let cancel {
+                    Button("Cancel", role: .cancel, action: cancel)
+                        .artemisFont(.body)
+                        .buttonStyle(.bordered)
+                        .controlSize(.large)
+                        .padding(.top, 4)
+                        .accessibilityIdentifier("busy.cancel")
+                }
             }
             .padding(28)
             .frame(minWidth: 200, maxWidth: 360)
             .glassEffect(.regular, in: .rect(cornerRadius: 28))
             .padding(32)
         }
-        .accessibilityElement(children: .combine)
+        .accessibilityElement(children: cancel == nil ? .combine : .contain)
         .accessibilityIdentifier("busy")
     }
 }
