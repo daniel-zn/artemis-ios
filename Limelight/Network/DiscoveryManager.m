@@ -38,6 +38,7 @@
     // will make it into the list from the database
     _callback = callback;
     shouldDiscover = NO;
+    _searchesNetwork = YES;
     _hostQueue = [NSMutableArray array];
     _pausedHosts = [NSMutableSet set];
     for (TemporaryHost* host in hosts)
@@ -220,7 +221,9 @@
     
     Log(LOG_I, @"Starting discovery");
     shouldDiscover = YES;
-    [_mdnsMan searchForHosts];
+    if (_searchesNetwork) {
+        [_mdnsMan searchForHosts];
+    }
     
     @synchronized (_hostQueue) {
         for (TemporaryHost* host in _hostQueue) {

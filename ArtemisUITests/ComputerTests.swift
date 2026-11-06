@@ -5,7 +5,8 @@
 //  The Computers list's actions against the demo PCs (-ArtemisDemo YES): waking an offline PC
 //  (by a tap, which then opens it, or from its menu) and the status following the PC, a wake
 //  that never comes up, and the PC actions the Mac app has (rename, Get Info, connect
-//  automatically).
+//  automatically). Cancel on the "Connecting…" card also on the real path, against stand-in PCs
+//  (-ArtemisTestFakePC YES: ComputerStore, discovery and HttpManager with a stand-in network).
 //
 
 import XCTest
@@ -214,6 +215,7 @@ final class ComputerTests: XCTestCase {
         XCTAssertTrue(card.waitForExistence(timeout: 5), "no Connecting card")
         XCTAssertTrue(cancel.waitForExistence(timeout: 3), "no Cancel on the Connecting card")
         XCTAssertEqual(cancel.label, "Cancel")
+        XCTAssertTrue(isRed(cancel), "Cancel isn't red")
         shot("\(appearance)-portrait-L-connect-1-cancel")
         cancel.tap()
         XCTAssertTrue(card.waitForNonExistence(timeout: 3), "the card stayed after Cancel")
@@ -247,6 +249,133 @@ final class ComputerTests: XCTestCase {
         XCTAssertFalse(app.alerts.firstMatch.exists, "a message after Cancel: \(app.alerts.firstMatch.label)")
         XCTAssertTrue(waitForLabel(livingRoom, contains: "Online", timeout: 3), "status after Cancel: \(livingRoom.label)")
         app.terminate()
+    }
+
+    // MARK: Cancel on the real path (stand-in PCs, -ArtemisTestFakePC)
+
+    /// The app on its real path (ComputerStore, discovery's polls, HttpManager) with stand-in PCs
+    /// on a stand-in network: TOWER (paired, awake, its apps not known yet) and DEN (asleep).
+    /// Waits until polls have found TOWER online.
+    private func launchFake(_ arguments: [String] = [], waitsForOnline: Bool = true) -> XCUIApplication {
+        let app = XCUIApplication()
+        app.launchArguments = ["-ArtemisDemo", "NO", "-ArtemisTestFakePC", "YES",
+                               "-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryL"] + arguments
+        app.launch()
+        let tower = app.buttons["computer.TOWER"]
+        XCTAssertTrue(tower.waitForExistence(timeout: 20), "no stand-in PC")
+        guard waitsForOnline else { return app }
+        XCTAssertTrue(waitForLabel(tower, contains: "Online", timeout: 15), "TOWER isn't online: \(tower.label)")
+        return app
+    }
+
+    /// Cancel leaves the PC as it was: the card goes, nothing opens or complains when the PC's
+    /// answer to the cancelled open arrives, and its row still says Online, not asleep.
+    private func cancelAndCheck(_ app: XCUIApplication, _ tag: String) {
+        let tower = app.buttons["computer.TOWER"]
+        let card = app.descendants(matching: .any)["busy"]
+        let cancel = app.buttons["busy.cancel"]
+        XCTAssertTrue(cancel.waitForExistence(timeout: 5), "\(tag): no Cancel on the Connecting card (\(tower.label))")
+        cancel.tap()
+        XCTAssertTrue(card.waitForNonExistence(timeout: 3), "\(tag): the card stayed after Cancel")
+        XCTAssertTrue(waitForLabel(tower, contains: "Online", timeout: 3), "\(tag): status after Cancel: \(tower.label)")
+        XCTAssertFalse(tower.label.contains("Waking") || tower.label.contains("wake"), "\(tag): an awake PC is asleep after Cancel: \(tower.label)")
+        XCTAssertFalse(app.alerts.firstMatch.exists, "\(tag): a message after Cancel: \(app.alerts.firstMatch.label)")
+    }
+
+    /// Tapping TOWER again after a Cancel does what the first tap did: it connects (the card,
+    /// then its apps), and never wakes it.
+    private func tapConnects(_ app: XCUIApplication, _ tag: String) {
+        let tower = app.buttons["computer.TOWER"]
+        XCTAssertTrue(tower.isHittable, "\(tag): not on the Computers list")
+        tower.tap()
+        let desktop = app.buttons["game.Desktop"]
+        let end = Date().addingTimeInterval(20)
+        while Date() < end && !desktop.exists {
+            if tower.exists && tower.label.contains("Waking") {
+                XCTFail("\(tag): the tap woke an awake PC: \(tower.label)")
+                break
+            }
+            if app.alerts.firstMatch.exists {
+                XCTFail("\(tag): \(app.alerts.firstMatch.label)")
+                break
+            }
+            usleep(200_000)
+        }
+        XCTAssertTrue(desktop.exists, "\(tag): TOWER's apps didn't open (\(tower.exists ? tower.label : "-"))")
+    }
+
+    /// Daniel's case: an awake PC whose answer comes in after Cancel (-ArtemisTestFakePCHold: the
+    /// open's serverinfo answer waits until just after Cancel). The row stays Online, and the
+    /// next tap connects, it doesn't wake the PC. The Cancel button is red (destructive).
+    func testCancelThenTapConnectsRealPath() {
+        let app = launchFake(["-ArtemisTestFakePCHold", "4.5"])
+        app.buttons["computer.TOWER"].tap()
+        let cancel = app.buttons["busy.cancel"]
+        XCTAssertTrue(cancel.waitForExistence(timeout: 5), "no Cancel on the Connecting card")
+        XCTAssertTrue(isRed(cancel), "Cancel isn't red")
+        cancelAndCheck(app, "cancel")
+        // Past the cancelled open's answer: still on the list
+        XCTAssertFalse(app.buttons["game.Desktop"].waitForExistence(timeout: 3), "the PC opened after Cancel")
+        cancelAndCheckStill(app)
+        tapConnects(app, "tap after Cancel")
+        app.terminate()
+    }
+
+    /// Cancel again and again, each time the moment the card shows, then a quick tap: TOWER
+    /// stays online and that tap connects.
+    func testRepeatedCancelsThenQuickTapRealPath() {
+        let app = launchFake(["-ArtemisTestFakePCHold", "4.5"])
+        let tower = app.buttons["computer.TOWER"]
+        for round in 1...3 {
+            tower.tap()
+            cancelAndCheck(app, "round \(round)")
+        }
+        tapConnects(app, "tap after 3 Cancels")
+        app.terminate()
+    }
+
+    /// The only PC opens by itself at launch (-ArtemisTestFakePCAlone): a tap and Cancel while
+    /// that's still asking the PC stops it too, so nothing opens behind the user's Cancel, and
+    /// the next tap connects.
+    func testCancelStopsTheLaunchOpenRealPath() {
+        // Tapped as soon as it shows: its status may not be known yet (the open waits for it),
+        // and the launch's own open (no card) is still asking TOWER, which holds its answer
+        let app = launchFake(["-ArtemisTestFakePCAlone", "YES", "-ArtemisTestFakePCHold", "4.8"], waitsForOnline: false)
+        let tower = app.buttons["computer.TOWER"]
+        XCTAssertFalse(app.buttons["game.Desktop"].exists, "TOWER opened before the tap")
+        tower.tap()
+        cancelAndCheck(app, "cancel at launch")
+        XCTAssertFalse(app.buttons["game.Desktop"].waitForExistence(timeout: 4), "the PC opened after Cancel")
+        tapConnects(app, "tap after Cancel at launch")
+        app.terminate()
+    }
+
+    /// Still on the Computers list with TOWER online.
+    private func cancelAndCheckStill(_ app: XCUIApplication) {
+        let tower = app.buttons["computer.TOWER"]
+        XCTAssertTrue(tower.isHittable, "not back on the Computers list")
+        XCTAssertTrue(tower.label.contains("Online"), "status after the cancelled answer: \(tower.label)")
+    }
+
+    /// The button's text is drawn in red (systemRed, light or dark): most of its strongly coloured
+    /// pixels are red, none blue.
+    private func isRed(_ element: XCUIElement) -> Bool {
+        let image = element.screenshot().image
+        guard let cg = image.cgImage else { return false }
+        let width = cg.width, height = cg.height
+        var pixels = [UInt8](repeating: 0, count: width * height * 4)
+        let space = CGColorSpaceCreateDeviceRGB()
+        guard let context = CGContext(data: &pixels, width: width, height: height, bitsPerComponent: 8, bytesPerRow: width * 4,
+                                      space: space, bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue) else { return false }
+        context.draw(cg, in: CGRect(x: 0, y: 0, width: width, height: height))
+        var red = 0, blue = 0
+        for i in stride(from: 0, to: pixels.count, by: 4) {
+            let r = Int(pixels[i]), g = Int(pixels[i + 1]), b = Int(pixels[i + 2])
+            if r > 180 && g < 110 && b < 110 { red += 1 }
+            if b > 180 && r < 110 { blue += 1 }
+        }
+        print("[isRed] red \(red) blue \(blue) of \(width * height)")
+        return red > 20 && red > blue * 4
     }
 
     /// A paired PC that goes to sleep (-ArtemisDemoSleep: an answer over plain HTTP only, then

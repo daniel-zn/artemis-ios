@@ -165,7 +165,12 @@
           {
             "paths": [
               "Artemis/Model/ComputerStore.swift",
-              "Artemis/Views/RootView.swift"
+              "Artemis/Model/FakePC.swift",
+              "Artemis/Views/RootView.swift",
+              "Artemis/Bridge/ArtemisBridge.m",
+              "Limelight/Network/DiscoveryManager.m",
+              "Limelight/Network/DiscoveryWorker.m",
+              "Limelight/Network/HttpManager.m"
             ],
             "tests": [
               "ComputerTests",

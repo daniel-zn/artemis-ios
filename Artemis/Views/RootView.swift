@@ -62,7 +62,7 @@ struct BusyOverlay: View {
                     .artemisFont(.headline)
                     .multilineTextAlignment(.center)
                 if let cancel {
-                    Button("Cancel", role: .cancel, action: cancel)
+                    Button("Cancel", role: .destructive, action: cancel)
                         .artemisFont(.body)
                         .buttonStyle(.bordered)
                         .controlSize(.large)

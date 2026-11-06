@@ -58,6 +58,9 @@ final class ComputerStore {
     @ObservationIgnored private var waking: [String: WakeAttempt] = [:]
     @ObservationIgnored private var wakeTimer: Timer?
     @ObservationIgnored private var pairingHostID: String?
+    /// Every open of a PC still asking it (the user's under the card, and refreshes: the launch's,
+    /// coming back to the app's): Cancel stops all of that PC's, so none acts behind it.
+    @ObservationIgnored private var openAttempts: [ConnectAttempt] = []
     @ObservationIgnored private var inBackground = false
     @ObservationIgnored private var started = false
     @ObservationIgnored private var observers: [NSObjectProtocol] = []
@@ -115,15 +118,26 @@ final class ComputerStore {
         assetManager = AppAssetManager(callback: callbacks)
         opQueue.maxConcurrentOperationCount = 1
 
-        // UI tests of the empty screen (-ArtemisTestNoPCs YES): no saved PCs, no discovery
+        // UI tests of the empty screen (-ArtemisTestNoPCs YES): no saved PCs, no discovery.
+        // UI tests on the real path (-ArtemisTestFakePC YES): stand-in PCs on a stand-in network.
         let noPCs = UserDefaults.standard.bool(forKey: "ArtemisTestNoPCs")
-        let saved = noPCs ? [] : (DataManager().getHosts() as? [TemporaryHost]) ?? []
+        let fakePCs = FakePC.isEnabled && !noPCs
+        if fakePCs {
+            FakePC.install()
+        }
+        var saved = noPCs ? [] : (DataManager().getHosts() as? [TemporaryHost]) ?? []
+        // The stand-in PCs that polls saved are a test's, not this phone's
+        for host in saved where FakePC.uuids.contains(host.uuid ?? "") {
+            DataManager().remove(host)
+        }
+        saved = fakePCs ? FakePC.makeHosts() : saved.filter { !FakePC.uuids.contains($0.uuid ?? "") }
         for host in saved {
             ArtemisBridge.prepareSavedHost(host)
             hosts[host.uuid] = host
         }
         if !noPCs {
             discovery = DiscoveryManager(hosts: Array(hosts.values), andCallback: callbacks)
+            discovery?.searchesNetwork = !fakePCs
         }
         rebuild()
         updateShortcuts()
@@ -316,7 +330,7 @@ final class ComputerStore {
         if isDemo {
             // A demo PC that takes a while to answer (-ArtemisDemoConnectDelay), as a real one can
             if userInitiated && DemoData.connectDelay > 0 {
-                let attempt = beginConnecting(host)
+                let attempt = beginConnecting(host, id: id)
                 DispatchQueue.main.asyncAfter(deadline: .now() + DemoData.connectDelay) { [weak self] in
                     guard let self, self.finishConnecting(attempt) else { return }
                     self.openDemo(host, userInitiated: userInitiated, autoLaunch: autoLaunch)
@@ -335,8 +349,9 @@ final class ComputerStore {
             return
         }
 
-        // A refresh (no card) can't be cancelled, and doesn't end one that's showing
-        let attempt = userInitiated ? beginConnecting(host) : ConnectAttempt()
+        // A refresh has no card; it doesn't end one that's showing, and Cancel on one for the
+        // same PC stops it too
+        let attempt = userInitiated ? beginConnecting(host, id: id) : track(ConnectAttempt(hostID: id))
         let discovery = self.discovery
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
             // Wait for the PC's status to be known
@@ -357,7 +372,9 @@ final class ComputerStore {
             if let error = ArtemisBridge.refreshServerInfo(for: host, discovery: discovery) {
                 DispatchQueue.main.async {
                     guard let self, self.finishConnecting(attempt) else { return }
-                    host.state = .offline
+                    // Its state stays what discovery's polls say (they try again, and every
+                    // address): one request that failed doesn't make an awake PC asleep, so
+                    // the next tap connects again instead of waking it
                     self.rebuild()
                     self.leaveGames(of: id)
                     // Only display an alert if this was the result of a real user action
@@ -405,12 +422,22 @@ final class ComputerStore {
         }
     }
 
-    /// Shows the "Connecting…" card for an open that Cancel can stop.
-    private func beginConnecting(_ host: TemporaryHost) -> ConnectAttempt {
-        let attempt = ConnectAttempt()
+    /// Shows the "Connecting…" card for an open that Cancel can stop. The tap takes over from
+    /// a refresh of the same PC still asking it, so only this open acts on the answer.
+    private func beginConnecting(_ host: TemporaryHost, id: String) -> ConnectAttempt {
         connecting?.cancel()
+        for other in openAttempts where other.hostID == id {
+            other.cancel()
+        }
+        let attempt = track(ConnectAttempt(hostID: id))
         connecting = attempt
         busyMessage = "Connecting to \(customNames[host.uuid] ?? host.name)…"
+        return attempt
+    }
+
+    private func track(_ attempt: ConnectAttempt) -> ConnectAttempt {
+        openAttempts.removeAll { $0.isCancelled || $0.isFinished }
+        openAttempts.append(attempt)
         return attempt
     }
 
@@ -418,6 +445,7 @@ final class ComputerStore {
     /// happens. Otherwise its card goes (a refresh's answer leaves another open's card alone).
     private func finishConnecting(_ attempt: ConnectAttempt) -> Bool {
         if attempt.isCancelled { return false }
+        attempt.finish()
         if connecting === attempt {
             connecting = nil
             busyMessage = nil
@@ -433,6 +461,13 @@ final class ComputerStore {
         guard let attempt = connecting else { return }
         logInfo("Connecting cancelled")
         attempt.cancel()
+        // The PC's other opens too (the launch's own, say): nothing opens it behind the Cancel
+        for other in openAttempts where other.hostID == attempt.hostID {
+            other.cancel()
+        }
+        openAttempts.removeAll { $0.isCancelled || $0.isFinished }
+        NotificationCenter.default.post(name: .artemisConnectingCancelled, object: nil)
+        connecting?.finish()
         connecting = nil
         busyMessage = nil
         if pairingHostID != nil {
@@ -480,7 +515,7 @@ final class ComputerStore {
                 guard let self else { return }
                 self.loadingGames.remove(id)
                 if let error {
-                    host.state = .offline
+                    // As for serverinfo: the polls say whether it's still up
                     self.rebuild()
                     if self.selectedHostID == id {
                         self.path.removeAll()
@@ -506,6 +541,7 @@ final class ComputerStore {
 
     fileprivate func pairingStarted(pin: String) {
         guard let id = pairingHostID, let host = hosts[id] else { return }
+        connecting?.finish()
         connecting = nil
         busyMessage = nil
         pairing = PairingInfo(hostID: id, hostName: customNames[id] ?? host.name, pin: pin)
@@ -515,6 +551,7 @@ final class ComputerStore {
         guard pairingHostID != nil else { return }
         pairingHostID = nil
         pairing = nil
+        connecting?.finish()
         connecting = nil
         busyMessage = nil
         discovery?.startDiscovery()
@@ -525,6 +562,7 @@ final class ComputerStore {
         guard let id = pairingHostID, let host = hosts[id] else { return }
         pairingHostID = nil
         pairing = nil
+        connecting?.finish()
         connecting = nil
         busyMessage = nil
         if let serverCert {
@@ -904,12 +942,21 @@ final class ComputerStore {
 /// One open of a PC that the "Connecting…" card's Cancel can stop; the thread waiting for the
 /// PC checks it between steps.
 final class ConnectAttempt: @unchecked Sendable {
+    let hostID: String
     private let lock = NSLock()
     private var cancelled = false
+    private var finished = false
+
+    init(hostID: String) {
+        self.hostID = hostID
+    }
 
     var isCancelled: Bool { lock.withLock { cancelled } }
+    var isFinished: Bool { lock.withLock { finished } }
 
     func cancel() { lock.withLock { cancelled = true } }
+    /// Its answer arrived and was acted on.
+    func finish() { lock.withLock { finished = true } }
 }
 
 private struct WakeAttempt {

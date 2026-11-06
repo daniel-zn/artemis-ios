@@ -22,6 +22,8 @@ extern NSString* const ArtemisHostUpdatedNotification;
 @interface DiscoveryManager : NSObject <MDNSCallback>
 
 - (id) initWithHosts:(NSArray*)hosts andCallback:(id<DiscoveryCallback>) callback;
+/// NO: only the hosts it was given are polled, no mDNS search (UI tests' stand-in PC).
+@property (nonatomic) BOOL searchesNetwork;
 - (void) startDiscovery;
 - (void) stopDiscovery;
 - (void) stopDiscoveryBlocking;

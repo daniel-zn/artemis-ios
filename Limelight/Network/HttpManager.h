@@ -31,6 +31,9 @@
 - (NSURLRequest*) newAppAssetRequestWithAppId:(NSString*)appId;
 - (void) executeRequestSynchronously:(HttpRequest*)request;
 
+/// UI tests' stand-in PC (-ArtemisTestFakePC): these URL protocols answer every request.
++ (void) setTestProtocolClasses:(NSArray*)classes;
+
 @end
 
 

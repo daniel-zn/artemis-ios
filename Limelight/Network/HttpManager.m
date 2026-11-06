@@ -105,6 +105,12 @@
     return YES;
 }
 
+static NSArray* testProtocolClasses;
+
++ (void) setTestProtocolClasses:(NSArray*)classes {
+    testProtocolClasses = classes;
+}
+
 - (void) executeRequestSynchronously:(HttpRequest*)request {
     // This is a special case to handle failure of HTTPS port fetching
     if (!request.request) {
@@ -121,7 +127,11 @@
     __block dispatch_semaphore_t requestLock = dispatch_semaphore_create(0);
     
     Log(LOG_D, @"Making Request: %@", request);
-    NSURLSession* urlSession = [NSURLSession sessionWithConfiguration:[NSURLSessionConfiguration ephemeralSessionConfiguration] delegate:self delegateQueue:nil];
+    NSURLSessionConfiguration* configuration = [NSURLSessionConfiguration ephemeralSessionConfiguration];
+    if (testProtocolClasses) {
+        configuration.protocolClasses = testProtocolClasses;
+    }
+    NSURLSession* urlSession = [NSURLSession sessionWithConfiguration:configuration delegate:self delegateQueue:nil];
     [[urlSession dataTaskWithRequest:request.request completionHandler:^(NSData * __nullable data, NSURLResponse * __nullable response, NSError * __nullable error) {
         
         if (error != NULL) {
