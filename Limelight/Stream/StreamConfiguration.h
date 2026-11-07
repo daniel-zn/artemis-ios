@@ -33,5 +33,8 @@
 @property NSData* serverCert;
 // Artemis: send the microphone to the PC (Apollo's microphone passthrough)
 @property BOOL enableMic;
+// Artemis: the PC's uuid, and whether it's Sunshine or Apollo (the shared clipboard)
+@property NSString* hostUUID;
+@property BOOL isNvidiaServerSoftware;
 
 @end

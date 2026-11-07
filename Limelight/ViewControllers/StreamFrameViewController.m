@@ -46,6 +46,10 @@
     DesktopViewController *_desktop;
     BOOL _exiting;
     BOOL _connected;
+    // The session ended on its own (the PC no longer answers for it)
+    BOOL _terminated;
+    // Apollo's shared clipboard for this session (nil: off, or not connected yet)
+    ArtemisStreamClipboard *_clipboard;
     CGSize _keyboardSize;
     
 #if !TARGET_OS_TV
@@ -326,7 +330,21 @@
         return;
     }
     _exiting = YES;
-    
+
+    // The PC's last copy comes over first, while the PC still answers for the session
+    ArtemisStreamClipboard* clipboard = _clipboard;
+    _clipboard = nil;
+    if (clipboard != nil && !_terminated) {
+        [clipboard streamEnding:^{
+            (void)clipboard;
+            [self finishReturnToMainFrame];
+        }];
+        return;
+    }
+    [self finishReturnToMainFrame];
+}
+
+- (void) finishReturnToMainFrame {
     // Reset display mode back to default
     [self updatePreferredDisplayMode:NO];
     
@@ -353,6 +371,8 @@
 
 // This will fire if the user opens control center or gets a low battery message
 - (void)applicationWillResignActive:(NSNotification *)notification {
+    [_clipboard resignedActive];
+
     if (_inactivityTimer != nil) {
         [_inactivityTimer invalidate];
     }
@@ -377,6 +397,9 @@
 }
 
 - (void)applicationDidBecomeActive:(NSNotification *)notification {
+    // Copied in another app meanwhile: to the PC
+    [_clipboard becameActive];
+
     // Stop the background timer, since we're foregrounded again
     if (_inactivityTimer != nil) {
         Log(LOG_I, @"Stopping inactivity timer after becoming active again");
@@ -411,6 +434,8 @@
             return;
         }
         self->_connected = YES;
+        self->_clipboard = [[ArtemisStreamClipboard alloc] initWithConfig:self.streamConfig];
+        [self->_clipboard streamStarted];
         // Leave the spinner spinning until it's obscured by
         // the first frame of video.
         self->_stageLabel.hidden = YES;
@@ -437,6 +462,7 @@
     unsigned int portTestResults = LiTestClientConnectivity(CONN_TEST_SERVER, 443, portFlags);
     
     dispatch_async(dispatch_get_main_queue(), ^{
+        self->_terminated = YES;
         // Allow the display to go to sleep now
         [UIApplication sharedApplication].idleTimerDisabled = NO;
         
@@ -717,6 +743,12 @@
     [self setNeedsUpdateOfScreenEdgesDeferringSystemGestures];
     [self setNeedsUpdateOfHomeIndicatorAutoHidden];
     [self setNeedsStatusBarAppearanceUpdate];
+
+    // UI tests' stand-in PC never has a stream up: its clipboard starts with the screen
+    if (_clipboard == nil && !_exiting && [ArtemisStreamClipboard startsWithoutStream]) {
+        _clipboard = [[ArtemisStreamClipboard alloc] initWithConfig:self.streamConfig];
+        [_clipboard streamStarted];
+    }
 }
 
 - (void)viewWillTransitionToSize:(CGSize)size withTransitionCoordinator:(id<UIViewControllerTransitionCoordinator>)coordinator {

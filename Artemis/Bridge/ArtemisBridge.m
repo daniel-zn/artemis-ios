@@ -237,6 +237,8 @@
     streamConfig.appID = app.id;
     streamConfig.appName = app.name;
     streamConfig.serverCert = app.host.serverCert;
+    streamConfig.hostUUID = app.host.uuid;
+    streamConfig.isNvidiaServerSoftware = app.host.isNvidiaServerSoftware;
 
     DataManager* dataMan = [[DataManager alloc] init];
     TemporarySettings* streamSettings = [dataMan getSettings];

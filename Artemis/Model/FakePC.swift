@@ -15,9 +15,16 @@
 //    -ArtemisTestFakePCAlone YES      TOWER only, so the app opens it by itself at launch
 //    -ArtemisTestFakePCAppsCached YES TOWER's apps are known from before (tapping it opens
 //                                     them at once, without the card)
+//    -ArtemisTestFakePCClipboard <t>  TOWER's clipboard holds <t> (Apollo's /actions/clipboard);
+//                                     text sent to it comes back as "PC got: <text>"
+//    -ArtemisTestFakePCCopied <t>     the app copies <t> at launch, as if copied before the session
+//                                     (text from the test itself would need iOS's "Allow Paste",
+//                                     which the Simulator can't show: the read just gets nothing)
+//    -ArtemisTestFakePCSession YES    the stream screen's session counts as up for the shared
+//                                     clipboard at once (no stream is ever up with TOWER)
 //
 
-import Foundation
+import UIKit
 
 enum FakePC {
     static var isEnabled: Bool {
@@ -34,10 +41,44 @@ enum FakePC {
     private static var hold: Double { max(0, UserDefaults.standard.double(forKey: "ArtemisTestFakePCHold")) }
     private static var alone: Bool { UserDefaults.standard.bool(forKey: "ArtemisTestFakePCAlone") }
     private static var appsCached: Bool { UserDefaults.standard.bool(forKey: "ArtemisTestFakePCAppsCached") }
+    static var sessionForClipboard: Bool { isEnabled && UserDefaults.standard.bool(forKey: "ArtemisTestFakePCSession") }
+
+    /// TOWER's clipboard (CRLF line ends, as Windows has them).
+    private static var clipboard = UserDefaults.standard.string(forKey: "ArtemisTestFakePCClipboard") ?? ""
+
+    /// Apollo's /actions/clipboard?type=text: GET answers the clipboard, POST sets it.
+    fileprivate static func clipboardAnswer(to request: URLRequest) -> Data? {
+        guard request.url?.path == "/actions/clipboard", request.url?.query?.contains("type=text") == true else { return nil }
+        if request.httpMethod == "POST" {
+            let text = String(decoding: bodyData(of: request), as: UTF8.self)
+            lock.withLock { clipboard = "PC got: " + text }
+            return Data()
+        }
+        return Data(lock.withLock { clipboard }.utf8)
+    }
+
+    /// A URL protocol gets a POST's body as a stream.
+    private static func bodyData(of request: URLRequest) -> Data {
+        if let body = request.httpBody { return body }
+        guard let stream = request.httpBodyStream else { return Data() }
+        stream.open()
+        defer { stream.close() }
+        var data = Data()
+        var buffer = [UInt8](repeating: 0, count: 4096)
+        while stream.hasBytesAvailable {
+            let read = stream.read(&buffer, maxLength: buffer.count)
+            if read <= 0 { break }
+            data.append(buffer, count: read)
+        }
+        return data
+    }
 
     /// Answers every request HttpManager makes from now on.
     static func install() {
         HttpManager.setTestProtocolClasses([FakePCProtocol.self])
+        if let copied = UserDefaults.standard.string(forKey: "ArtemisTestFakePCCopied") {
+            UIPasteboard.general.string = copied
+        }
         NotificationCenter.default.addObserver(forName: .artemisConnectingCancelled, object: nil, queue: nil) { _ in
             lock.withLock { lastCancel = Date() }
         }
@@ -137,6 +178,10 @@ final class FakePCProtocol: URLProtocol {
         DispatchQueue.global().asyncAfter(deadline: .now() + 0.1) { [self] in
             if FakePC.lock.withLock({ stopped }) { return }
             let deadline = start.addingTimeInterval(request.timeoutInterval)
+            if request.url?.host == FakePC.towerAddress, let answer = FakePC.clipboardAnswer(to: request) {
+                deliver(answer)
+                return
+            }
             guard request.url?.host == FakePC.towerAddress, let url = request.url, let body = FakePC.body(for: url) else {
                 // Asleep or unknown: no answer within the time limit
                 if Date() >= deadline { deliver(nil) } else { check() }

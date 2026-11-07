@@ -20,6 +20,8 @@ enum AppPreferences {
         static let onScreenGamepadSize = "ArtemisGamepadSize"
         /// Controllers › On-screen controller opacity over the desktop (0.3–1).
         static let onScreenGamepadOpacity = "ArtemisGamepadOpacity"
+        /// Host PC › Share copied text with the host PC (Apollo's shared clipboard; on by default).
+        static let shareClipboard = "ArtemisShareClipboard"
     }
 
     static var quitAppAfterSession: Bool {
@@ -35,6 +37,10 @@ enum AppPreferences {
         let value = UserDefaults.standard.object(forKey: Keys.onScreenGamepadOpacity) == nil
             ? 0.75 : UserDefaults.standard.double(forKey: Keys.onScreenGamepadOpacity)
         return min(max(value, 0.3), 1)
+    }
+
+    static var shareClipboard: Bool {
+        UserDefaults.standard.object(forKey: Keys.shareClipboard) == nil || UserDefaults.standard.bool(forKey: Keys.shareClipboard)
     }
 
     static var gamepadMouse: Bool {

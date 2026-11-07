@@ -196,6 +196,47 @@ static NSArray* testProtocolClasses;
     }
 }
 
+- (NSInteger) clipboardRequestWithBody:(NSData*)body responseBody:(NSData**)responseBody timeout:(NSTimeInterval)timeout {
+    if (responseBody != NULL) {
+        *responseBody = nil;
+    }
+    // The pinned certificate and the client's (the session delegate) are what Apollo knows us by
+    if (_serverCert == nil || ![self ensureHttpsUrlPopulated:YES]) {
+        return -1;
+    }
+    NSURL* url = [NSURL URLWithString:[NSString stringWithFormat:@"%@/actions/clipboard?type=text&uniqueid=%@", _baseHTTPSURL, _uniqueId]];
+    NSMutableURLRequest* request = [NSMutableURLRequest requestWithURL:url];
+    request.timeoutInterval = timeout;
+    if (body != nil) {
+        request.HTTPMethod = @"POST";
+        request.HTTPBody = body;
+        [request setValue:@"text/plain; charset=utf-8" forHTTPHeaderField:@"Content-Type"];
+    }
+
+    __block NSData* data = nil;
+    __block NSInteger status = -1;
+    dispatch_semaphore_t done = dispatch_semaphore_create(0);
+    NSURLSessionConfiguration* configuration = [NSURLSessionConfiguration ephemeralSessionConfiguration];
+    if (testProtocolClasses) {
+        configuration.protocolClasses = testProtocolClasses;
+    }
+    NSURLSession* urlSession = [NSURLSession sessionWithConfiguration:configuration delegate:self delegateQueue:nil];
+    [[urlSession dataTaskWithRequest:request completionHandler:^(NSData* responseData, NSURLResponse* response, NSError* error) {
+        if (error == nil && [response isKindOfClass:[NSHTTPURLResponse class]]) {
+            status = ((NSHTTPURLResponse*)response).statusCode;
+            data = responseData;
+        }
+        dispatch_semaphore_signal(done);
+    }] resume];
+    dispatch_semaphore_wait(done, DISPATCH_TIME_FOREVER);
+    [urlSession invalidateAndCancel];
+
+    if (responseBody != NULL) {
+        *responseBody = data;
+    }
+    return status;
+}
+
 - (NSURLRequest*) createRequestFromString:(NSString*) urlString timeout:(int)timeout {
     NSURL* url = [[NSURL alloc] initWithString:urlString];
     NSMutableURLRequest* request = [NSMutableURLRequest requestWithURL:url];

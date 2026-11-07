@@ -34,6 +34,18 @@
       "timeout": 10
     },
     {
+      "name": "clipboard",
+      "run": "Scripts/clipboard-tests.sh",
+      "inputs": [
+        "Artemis/Clipboard/ClipboardSyncState.swift",
+        "Artemis/Clipboard/ClipboardSync.swift",
+        "ArtemisClipboardTests/**",
+        "Scripts/clipboard-tests.sh"
+      ],
+      "line": "build",
+      "timeout": 10
+    },
+    {
       "name": "ui",
       "run": "s=$(xcrun simctl list devices | grep -F 'Artemis Build (' | grep -oE '[0-9A-F-]{36}' | head -1); [ -n \"$s\" ] || { echo 'No Artemis Build Simulator'; exit 1; }; xcrun simctl boot \"$s\" 2>/dev/null; xcrun simctl bootstatus \"$s\" >/dev/null && SIM=$s APPEARANCES=light Scripts/ui-tests.sh; r=$?; xcrun simctl shutdown $s 2>/dev/null; exit $r",
       "inputs": [
@@ -56,6 +68,20 @@
           "ScreenshotTests/testEveryScreenUprightDefaultText"
         ],
         "rules": [
+          {
+            "paths": [
+              "Artemis/Clipboard/**",
+              "Artemis/Model/FakePC.swift",
+              "Limelight/ViewControllers/StreamFrameViewController.m",
+              "Limelight/Network/HttpManager.m",
+              "Artemis/Views/SettingsView.swift",
+              "ArtemisUITests/ClipboardTests.swift"
+            ],
+            "tests": [
+              "ClipboardTests",
+              "ScreenshotTests/testStreamStartsAndReturns"
+            ]
+          },
           {
             "paths": [
               "Artemis/Audio/**",

@@ -5,7 +5,7 @@
 # then a stream start and exit, the remote desktop's touch controls against the demo desktop
 # (DesktopTests: each gesture and the input events it sends), waking a PC and the Mac app's PC and
 # app actions (ComputerTests), a controller as the mouse (ControllerTests), the on-screen controller
-# and the connected screen's layout (OnScreenGamepadTests), the microphone (MicrophoneTests), and the app icon on the home screen.
+# and the connected screen's layout (OnScreenGamepadTests), the microphone (MicrophoneTests), the shared clipboard (ClipboardTests), and the app icon on the home screen.
 #
 #   SIM=<udid> Scripts/ui-tests.sh            (or the booted Simulator)
 #   APPEARANCES="dark" Scripts/ui-tests.sh    one appearance only
@@ -16,6 +16,7 @@
 #   ONLY=ControllerTests Scripts/ui-tests.sh       a controller as the mouse
 #   ONLY=OnScreenGamepadTests Scripts/ui-tests.sh  the on-screen controller, the trackpad and bar layout
 #   ONLY=MicrophoneTests Scripts/ui-tests.sh       the microphone: permission, Test microphone, the bar's mute
+#   ONLY=ClipboardTests Scripts/ui-tests.sh        the shared clipboard with the stand-in PC, the setting
 #   LIVE_HOST=<name>@<address> ONLY=LiveHostTests Scripts/ui-tests.sh   a real host: it shows up and
 #                                             opens (games, or a PIN that the test cancels)
 #   UI_TESTS=ScreenshotTests/testStreamStartsAndReturns,DesktopTests Scripts/ui-tests.sh
@@ -92,7 +93,8 @@ for appearance in ${APPEARANCES:-light dark}; do
     "") ONLY_ARGS=(-only-testing:ArtemisUITests/ScreenshotTests -only-testing:ArtemisUITests/DesktopTests
                    -only-testing:ArtemisUITests/ComputerTests -only-testing:ArtemisUITests/ControllerTests
                    -only-testing:ArtemisUITests/OnScreenGamepadTests -only-testing:ArtemisUITests/HomeScreenIconTests
-                   -only-testing:ArtemisUITests/MicrophoneTests -only-testing:ArtemisUITests/TryDemoTests) ;;
+                   -only-testing:ArtemisUITests/MicrophoneTests -only-testing:ArtemisUITests/TryDemoTests
+                   -only-testing:ArtemisUITests/ClipboardTests) ;;
     *) ONLY_ARGS=(-only-testing:"ArtemisUITests/ScreenshotTests/$ONLY") ;;
   esac; fi
   TEST_RUNNER_ARTEMIS_APPEARANCE="$appearance" TEST_RUNNER_ARTEMIS_SHOT_DIR="$OUT/shots" \

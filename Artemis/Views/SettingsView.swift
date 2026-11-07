@@ -152,6 +152,7 @@ struct SettingsPage: View {
     @AppStorage(AppPreferences.Keys.onScreenGamepadOpacity) private var onScreenGamepadOpacity = 0.75
     @AppStorage(AppPreferences.Keys.swapMouseButtons) private var swapMouseButtons = false
     @AppStorage(AppPreferences.Keys.quitAppAfterSession) private var quitAppAfterSession = false
+    @AppStorage(AppPreferences.Keys.shareClipboard) private var shareClipboard = true
 
     var body: some View {
         Form {
@@ -436,6 +437,12 @@ struct SettingsPage: View {
                 .accessibilityIdentifier("settings.quitAfterSession")
         } footer: {
             Note("When you disconnect, the app closes on the PC too. Unsaved work in it may be lost.")
+        }
+        Section {
+            Toggle("Share copied text with the host PC", isOn: $shareClipboard)
+                .accessibilityIdentifier("settings.shareClipboard")
+        } footer: {
+            Note("During a session with Apollo, text you copied before going into the session can be pasted on the PC, and text you copy on the PC can be pasted here.")
         }
     }
 

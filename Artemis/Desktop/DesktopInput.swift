@@ -117,6 +117,13 @@ final class MoonlightDesktopInput: NSObject, DesktopInput {
     /// The session's controllers, which the on-screen gamepad joins (StreamFrameViewController).
     @objc weak var controllers: ControllerSupport?
 
+    /// Ctrl+C or Ctrl+X: the shared clipboard fetches the PC's copy shortly after (StreamClipboard).
+    private static func noteCopy(_ keyCode: UInt16, modifiers: UInt8) {
+        guard modifiers & UInt8(MODIFIER_CTRL) != 0,
+              keyCode == KeyCode.letter("c") || keyCode == KeyCode.letter("x") else { return }
+        NotificationCenter.default.post(name: .artemisCopyKeySent, object: nil)
+    }
+
     func movePointer(x: Int, y: Int, width: Int, height: Int) {
         queue.async {
             LiSendMousePositionEvent(Int16(clamping: x), Int16(clamping: y), Int16(clamping: width), Int16(clamping: height))
@@ -145,12 +152,14 @@ final class MoonlightDesktopInput: NSObject, DesktopInput {
     }
 
     func setKey(_ keyCode: UInt16, down: Bool, modifiers: UInt8) {
+        if down { Self.noteCopy(keyCode, modifiers: modifiers) }
         queue.async {
             LiSendKeyboardEvent(Int16(bitPattern: keyCode), CChar(down ? KEY_ACTION_DOWN : KEY_ACTION_UP), CChar(bitPattern: modifiers))
         }
     }
 
     func keyStroke(_ keyCode: UInt16, modifiers: UInt8, nonNormalized: Bool) {
+        Self.noteCopy(keyCode, modifiers: modifiers)
         queue.async {
             let held = Modifier.pressOrder.filter { modifiers & $0.flag != 0 }
             var flags: UInt8 = 0
