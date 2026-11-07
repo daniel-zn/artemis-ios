@@ -63,10 +63,26 @@ xcodebuild build-for-testing -project Moonlight.xcodeproj -scheme ArtemisUITests
   -destination "platform=iOS Simulator,id=$SIM" -derivedDataPath "$DD" > "$OUT/build.log" 2>&1 \
   || { grep -E "error:" "$OUT/build.log" | head -20; exit 1; }
 
-# Every selected test ran (passed, failed or skipped) in this appearance's log; a whole class ran
-# every test it declares.
+# Every selected test ran (passed, failed or skipped) in this appearance's log or its result
+# bundle (xcodebuild's output sometimes loses a stretch of lines, results and all); a whole class
+# ran every test it declares.
 check_selected() {
-  local log="$1" t class n declared missing=0
+  local log="$1" bundle="$2" t class n declared missing=0
+  local ran; ran=$(mktemp)
+  cat "$log" > "$ran"
+  [[ -d "$bundle" ]] && xcrun xcresulttool get test-results tests --path "$bundle" 2>/dev/null | python3 -c '
+import json, sys
+def walk(node, suite):
+    if node.get("nodeType") == "Test Case" and suite:
+        name = node.get("name", "").removesuffix("()")
+        result = {"Passed": "passed", "Failed": "failed", "Skipped": "skipped", "Expected Failure": "passed"}.get(node.get("result"))
+        if result: print(f"Test Case \x27-[ArtemisUITests.{suite} {name}]\x27 {result}")
+        return
+    if node.get("nodeType") == "Test Suite": suite = node.get("name")
+    for child in node.get("children", []): walk(child, suite)
+for node in json.load(sys.stdin).get("testNodes", []): walk(node, None)
+' >> "$ran" || true
+  log="$ran"
   for t in "${SELECTED[@]}"; do
     class="${t%%/*}"
     if [[ "$t" == */* ]]; then
@@ -78,6 +94,7 @@ check_selected() {
       [[ $n -ge $declared && $n -gt 0 ]] || { echo "NOT RUN: $t ($n of its $declared tests ran)"; missing=1; }
     fi
   done
+  rm -f "$ran"
   return $missing
 }
 
@@ -97,14 +114,16 @@ for appearance in ${APPEARANCES:-light dark}; do
                    -only-testing:ArtemisUITests/ClipboardTests) ;;
     *) ONLY_ARGS=(-only-testing:"ArtemisUITests/ScreenshotTests/$ONLY") ;;
   esac; fi
+  rm -rf "$OUT/$appearance.xcresult"
   TEST_RUNNER_ARTEMIS_APPEARANCE="$appearance" TEST_RUNNER_ARTEMIS_SHOT_DIR="$OUT/shots" \
   TEST_RUNNER_ARTEMIS_LIVE_HOST="${LIVE_HOST:-}" \
     xcodebuild test-without-building -project Moonlight.xcodeproj -scheme ArtemisUITests \
       -destination "platform=iOS Simulator,id=$SIM" -derivedDataPath "$DD" -collect-test-diagnostics never \
+      -resultBundlePath "$OUT/$appearance.xcresult" \
       "${ONLY_ARGS[@]}" > "$OUT/$appearance.log" 2>&1 || { rc=$?; [[ $status == 0 ]] && status=$rc; }
   echo "== $appearance"
   grep -E "error:|Test Case .*(passed|failed|skipped)|\*\* TEST" "$OUT/$appearance.log" | sed 's/^.*error: //' | tail -60
-  if [[ ${#SELECTED[@]} -gt 0 ]] && ! check_selected "$OUT/$appearance.log"; then
+  if [[ ${#SELECTED[@]} -gt 0 ]] && ! check_selected "$OUT/$appearance.log" "$OUT/$appearance.xcresult"; then
     [[ $status == 0 ]] && status=1
   fi
 done
