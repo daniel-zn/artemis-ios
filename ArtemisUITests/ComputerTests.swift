@@ -395,7 +395,8 @@ final class ComputerTests: XCTestCase {
             usleep(200_000)
         }
         XCTAssertFalse(seen.contains { $0.contains("Not paired") }, "a sleeping paired PC showed as not paired: \(seen)")
-        XCTAssertTrue(waitForLabel(workstation, contains: "Offline · Tap to wake", timeout: 3), "status: \(workstation.label) (\(seen))")
+        // A loaded Mac can take seconds just to check the label (5.7 s seen, with it already right)
+        XCTAssertTrue(waitForLabel(workstation, contains: "Offline · Tap to wake", timeout: 10), "status: \(workstation.label) (\(seen))")
         shot("\(appearance)-portrait-L-sleep-1-offline")
 
         workstation.tap()
@@ -407,7 +408,7 @@ final class ComputerTests: XCTestCase {
         XCTAssertTrue(alert.label.contains("Couldn't Wake WORKSTATION"), "alert: \(alert.label)")
         shot("\(appearance)-portrait-L-sleep-3-couldnt-wake")
         alert.buttons["OK"].tap()
-        XCTAssertTrue(waitForLabel(workstation, contains: "Offline · Tap to wake", timeout: 3), "status: \(workstation.label)")
+        XCTAssertTrue(waitForLabel(workstation, contains: "Offline · Tap to wake", timeout: 10), "status: \(workstation.label)")
         XCTAssertFalse(app.staticTexts["pairing.pin"].exists, "the PIN sheet came up")
         app.terminate()
     }
