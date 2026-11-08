@@ -1,6 +1,6 @@
 # Artemis for iPhone and the Mac app
 
-What the macOS client ([daniel-zn/danielzn-moonlight-qt](https://github.com/daniel-zn/danielzn-moonlight-qt), its
+What the macOS client ([daniel-zn/artemis-macos](https://github.com/daniel-zn/artemis-macos), its
 native Mac interface) does, and how Artemis on the iPhone does the same. Mac labels are quoted from the Mac app
 (`app/gui/PcView.qml`, `AppView.qml`, `MacMenuBar.qml`, `SettingsView.qml`); the iPhone words them for a remote
 desktop (apps rather than games, a session rather than a stream). Checked against the Mac app's `main` on 2026-10-17.

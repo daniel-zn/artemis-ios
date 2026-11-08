@@ -76,7 +76,7 @@ struct PairingInfo: Identifiable {
 }
 
 enum Links {
-    static let sourceCode = URL(string: "https://github.com/daniel-zn/danielzn-moonlight-ios")!
+    static let sourceCode = URL(string: "https://github.com/daniel-zn/artemis-ios")!
     static let license = URL(string: "https://www.gnu.org/licenses/gpl-3.0.html")!
     static let troubleshooting = URL(string: "https://github.com/moonlight-stream/moonlight-docs/wiki/Troubleshooting")!
     static let setupGuide = URL(string: "https://github.com/moonlight-stream/moonlight-docs/wiki/Setup-Guide")!

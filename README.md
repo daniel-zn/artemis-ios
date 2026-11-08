@@ -13,9 +13,9 @@ Check out [the Moonlight wiki](https://github.com/moonlight-stream/moonlight-doc
 ## About this fork
 
 > [!NOTE]
-> This is a personal fork (`daniel-zn/danielzn-moonlight-ios`, default branch `main`), an iPhone app called
+> This is a personal fork (`daniel-zn/artemis-ios`, default branch `main`), an iPhone app called
 > **Artemis**, made to pair with [daniel-zn/danielzn-Apollo](https://github.com/daniel-zn/danielzn-Apollo) and to
-> match the macOS client in [daniel-zn/danielzn-moonlight-qt](https://github.com/daniel-zn/danielzn-moonlight-qt).
+> match the macOS client in [daniel-zn/artemis-macos](https://github.com/daniel-zn/artemis-macos).
 > It doesn't follow upstream updates. It's not affiliated with Moonlight, nor with the Artemis Android client.
 
 Changes from upstream so far:
