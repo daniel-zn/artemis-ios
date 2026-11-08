@@ -6,7 +6,7 @@
 //  StreamClipboard, HttpManager, UIPasteboard) against the stand-in PC TOWER
 //  (-ArtemisTestFakePC), whose /actions/clipboard answers "PC got: <text>" once text reaches it.
 //  TOWER never has a stream up, so -ArtemisTestFakePCSession starts the clipboard with the stream
-//  screen. The desktop's state line shows the app's pasteboard reads, what the pastes did and
+//  screen. The desktop's state line shows the app's pasteboard reads and writes, what the pastes did and
 //  what TOWER's clipboard got. The decisions themselves (what's read, sent and written when) are
 //  in Scripts/clipboard-tests.sh.
 //
@@ -79,15 +79,12 @@ final class ClipboardTests: XCTestCase {
     func testPasteSendsTextThenCtrlV() {
         let copied = "copied on the iPhone \(UUID().uuidString.prefix(8))\nsecond line"
         let app = launch(share: true, copied: copied.replacingOccurrences(of: "\n", with: "⏎"))
-        XCTAssertTrue(app.buttons["game.Desktop"].waitForExistence(timeout: 20), "TOWER's apps didn't open")
-        let start = UIPasteboard.general.changeCount
         openStreamScreen(app)
 
         // Several of the clipboard's polls (every 2 s): nothing read, sent or written
         sleep(5)
-        XCTAssertTrue(status(app).contains("pasteboard reads 0 · pastes none"), "read at the start: \(status(app))")
+        XCTAssertTrue(status(app).contains("pasteboard reads 0 · writes 0 · pastes none"), "read at the start: \(status(app))")
         XCTAssertTrue(status(app).contains("the PC's clipboard got []"), "sent at the start: \(status(app))")
-        XCTAssertEqual(UIPasteboard.general.changeCount, start, "the PC's older text came over")
 
         // Paste in the bar: no question, the text onto the PC's clipboard, then Ctrl+V
         let paste = app.buttons["bar.paste"]
@@ -101,13 +98,12 @@ final class ClipboardTests: XCTestCase {
         XCTAssertTrue(status(app).contains("pasteboard reads 0"), "the app read the pasteboard itself: \(status(app))")
         XCTAssertFalse(XCUIApplication(bundleIdentifier: "com.apple.springboard").buttons["Allow Paste"].exists, "iOS asked")
 
-        // The PC's clipboard changed ("PC got: …"): it comes over once
-        let written = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in UIPasteboard.general.changeCount > start }, object: nil)
-        XCTAssertEqual(XCTWaiter.wait(for: [written], timeout: 20), .completed, "the PC's copy didn't come over")
+        // The PC's clipboard changed ("PC got: …"): it comes over once (the app's count of writes,
+        // not changeCount: the Simulator also takes whatever is copied on the Mac)
+        XCTAssertTrue(waitForStatus(app, "writes 1 · ", timeout: 20), "the PC's copy didn't come over: \(status(app))")
         sleep(5)
-        XCTAssertEqual(UIPasteboard.general.changeCount, start + 1, "the pasteboard kept changing")
+        XCTAssertTrue(status(app).contains("writes 1 · "), "the pasteboard kept changing: \(status(app))")
         disconnect(app)
-        XCTAssertEqual(UIPasteboard.general.changeCount, start + 1, "the pasteboard changed when leaving")
         XCTAssertFalse(app.alerts.firstMatch.exists, "a message after the session: \(app.alerts.firstMatch.label)")
         app.terminate()
     }
@@ -119,10 +115,8 @@ final class ClipboardTests: XCTestCase {
         let app = launch(share: true, copied: copied)
         openStreamScreen(app)
         sleep(3)
-        XCTAssertTrue(status(app).contains("pasteboard reads 0 · pastes none"), "read at the start: \(status(app))")
+        XCTAssertTrue(status(app).contains("pasteboard reads 0 · writes 0 · pastes none"), "read at the start: \(status(app))")
 
-        // Before the paste: the PC's copy ("PC got: …") can come back within a poll of it
-        let start = UIPasteboard.general.changeCount
         app.typeKey("v", modifierFlags: .command)
         allowPasteIfAsked()
         XCTAssertTrue(waitForStatus(app, "pastes Ctrl+V after the PC got 1"), "⌘V: no Ctrl+V after the text landed: \(status(app))")
@@ -130,11 +124,10 @@ final class ClipboardTests: XCTestCase {
         XCTAssertTrue(status(app).contains("pasteboard reads 1"), "⌘V: \(status(app))")
 
         // The PC's copy comes back here; Ctrl+V now pastes the PC's clipboard as it is
-        let written = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in UIPasteboard.general.changeCount > start }, object: nil)
-        XCTAssertEqual(XCTWaiter.wait(for: [written], timeout: 20), .completed, "the PC's copy didn't come over")
+        XCTAssertTrue(waitForStatus(app, "writes 1 · ", timeout: 20), "the PC's copy didn't come over: \(status(app))")
         app.typeKey("v", modifierFlags: .control)
         XCTAssertTrue(waitForStatus(app, "Ctrl+V after the PC got 1, Ctrl+V after the PC got 1"), "Ctrl+V: \(status(app))")
-        XCTAssertTrue(status(app).contains("pasteboard reads 1 "), "Ctrl+V read the pasteboard again: \(status(app))")
+        XCTAssertTrue(status(app).contains("pasteboard reads 1 · "), "Ctrl+V read the pasteboard again: \(status(app))")
         disconnect(app)
         app.terminate()
     }
@@ -159,15 +152,12 @@ final class ClipboardTests: XCTestCase {
     func testNothingSharedWhenOff() {
         let app = launch(share: false, copied: "not for the PC \(UUID().uuidString.prefix(8))")
         openStreamScreen(app)
-        let count = UIPasteboard.general.changeCount
-        // Several of the clipboard's polls (every 2 s) would have run by now
-        let end = Date().addingTimeInterval(6)
-        while Date() < end {
-            XCTAssertEqual(UIPasteboard.general.changeCount, count, "the pasteboard changed with sharing off")
-            RunLoop.current.run(until: Date().addingTimeInterval(0.5))
-        }
+        // Several of the clipboard's polls (every 2 s) would have run by now. The app's own count of
+        // writes, not changeCount: the Simulator also takes whatever is copied on the Mac.
+        RunLoop.current.run(until: Date().addingTimeInterval(6))
+        XCTAssertTrue(status(app).contains("pasteboard reads 0 · writes 0 · pastes none"), "shared with sharing off: \(status(app))")
+        XCTAssertTrue(status(app).contains("the PC's clipboard got []"), "the PC got text with sharing off: \(status(app))")
         disconnect(app)
-        XCTAssertEqual(UIPasteboard.general.changeCount, count, "the pasteboard changed after leaving with sharing off")
         app.terminate()
     }
 

@@ -812,7 +812,7 @@ final class DesktopViewController: UIViewController {
         let packets = SessionAudio.shared.packetStats
         lines[0] += " · microphone " + (session.microphoneOn ? (session.microphoneMuted ? "muted" : "on") : "off")
             + " · mic packets \(packets.encoded) of \(packets.samples) samples"
-        lines[0] += " · pasteboard reads \(StreamClipboard.pasteboardReads) · pastes " + (pasteLog.isEmpty ? "none" : pasteLog.joined(separator: ", "))
+        lines[0] += " · pasteboard reads \(StreamClipboard.pasteboardReads) · writes \(StreamClipboard.pasteboardWrites) · pastes " + (pasteLog.isEmpty ? "none" : pasteLog.joined(separator: ", "))
         if FakePC.isEnabled {
             let got = FakePC.clipboardReceived.map { $0.replacingOccurrences(of: "\r\n", with: "⏎").replacingOccurrences(of: "·", with: "•") }
             lines[0] += " · the PC's clipboard got [" + got.joined(separator: "|") + "]"

@@ -63,6 +63,9 @@ final class StreamClipboard: NSObject {
     /// Reads of the general pasteboard's text this run (each can bring up "Allow Paste"),
     /// for the UI tests: none when a session starts or comes back.
     static private(set) var pasteboardReads = 0
+    /// How often the PC's copies were put on the pasteboard (for the UI tests: the Simulator also
+    /// takes the Mac's copies, so its changeCount can't tell).
+    static fileprivate(set) var pasteboardWrites = 0
 
     /// The pasteboard's text, read now (counted).
     static func readPasteboard() -> String? {
@@ -104,7 +107,10 @@ private final class GeneralPasteboard: LocalPasteboard {
     var changeCount: Int { UIPasteboard.general.changeCount }
     var hasStrings: Bool { UIPasteboard.general.hasStrings }
     func readString() -> String? { StreamClipboard.readPasteboard() }
-    func write(_ string: String) { UIPasteboard.general.string = string }
+    func write(_ string: String) {
+        StreamClipboard.pasteboardWrites += 1
+        UIPasteboard.general.string = string
+    }
 }
 
 private final class DefaultsKnownCountStore: ClipboardKnownCountStore {
