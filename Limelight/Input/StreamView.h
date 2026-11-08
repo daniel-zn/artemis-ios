@@ -34,6 +34,8 @@
 - (void) useDesktopTouchHandler:(UIResponder*)handler;
 /// Artemis: called with the pointer's position on the desktop (0–1) when a mouse moves it.
 @property (nonatomic, copy) void (^pointerMoved)(CGPoint normalized);
+// A hardware keyboard's key, before it goes to the PC: YES when it was taken (Ctrl+V, Cmd+V paste)
+@property (nonatomic, copy) BOOL (^pasteKey)(UIPress* press, BOOL down) API_AVAILABLE(ios(13.4));
 - (OnScreenControlsLevel) getCurrentOscState;
 
 #if !TARGET_OS_TV

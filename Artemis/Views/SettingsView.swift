@@ -442,7 +442,7 @@ struct SettingsPage: View {
             Toggle("Share copied text with the host PC", isOn: $shareClipboard)
                 .accessibilityIdentifier("settings.shareClipboard")
         } footer: {
-            Note("During a session with Apollo, text you copied before going into the session can be pasted on the PC, and text you copy on the PC can be pasted here.")
+            Note("During a session with Apollo, Paste in the control bar (or Ctrl+V or ⌘V on a keyboard) pastes the text you copied here on the PC, and text you copy on the PC can be pasted here.")
         }
     }
 

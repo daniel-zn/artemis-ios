@@ -197,6 +197,9 @@ private struct BarButtons: View {
             .accessibilityIdentifier("bar.microphone")
         }
 
+        // iOS's paste control: the tap is the permission, no "Allow Paste" (PasteControl.swift)
+        PasteBarButton { session.actions.paste($0) }
+
         Menu {
             // The everyday ones first; the rest in submenus, so the menu fits in landscape
             ForEach(Shortcut.common) { shortcut in

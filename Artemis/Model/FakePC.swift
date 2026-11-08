@@ -16,8 +16,9 @@
 //    -ArtemisTestFakePCAppsCached YES TOWER's apps are known from before (tapping it opens
 //                                     them at once, without the card)
 //    -ArtemisTestFakePCClipboard <t>  TOWER's clipboard holds <t> (Apollo's /actions/clipboard);
-//                                     text sent to it comes back as "PC got: <text>"
-//    -ArtemisTestFakePCCopied <t>     the app copies <t> at launch, as if copied before the session
+//                                     text sent to it comes back as "PC got: <text>" (and is
+//                                     listed in the desktop's state line, see clipboardReceived)
+//    -ArtemisTestFakePCCopied <t>     the app copies <t> at launch ("⏎": a line end), as if copied before the session
 //                                     (text from the test itself would need iOS's "Allow Paste",
 //                                     which the Simulator can't show: the read just gets nothing)
 //    -ArtemisTestFakePCSession YES    the stream screen's session counts as up for the shared
@@ -46,12 +47,19 @@ enum FakePC {
     /// TOWER's clipboard (CRLF line ends, as Windows has them).
     private static var clipboard = UserDefaults.standard.string(forKey: "ArtemisTestFakePCClipboard") ?? ""
 
+    /// The texts posted to TOWER's clipboard this run, in order.
+    static var clipboardReceived: [String] { lock.withLock { received } }
+    private static var received: [String] = []
+
     /// Apollo's /actions/clipboard?type=text: GET answers the clipboard, POST sets it.
     fileprivate static func clipboardAnswer(to request: URLRequest) -> Data? {
         guard request.url?.path == "/actions/clipboard", request.url?.query?.contains("type=text") == true else { return nil }
         if request.httpMethod == "POST" {
             let text = String(decoding: bodyData(of: request), as: UTF8.self)
-            lock.withLock { clipboard = "PC got: " + text }
+            lock.withLock {
+                clipboard = "PC got: " + text
+                received.append(text)
+            }
             return Data()
         }
         return Data(lock.withLock { clipboard }.utf8)
@@ -77,7 +85,8 @@ enum FakePC {
     static func install() {
         HttpManager.setTestProtocolClasses([FakePCProtocol.self])
         if let copied = UserDefaults.standard.string(forKey: "ArtemisTestFakePCCopied") {
-            UIPasteboard.general.string = copied
+            // "⏎" for a line end: a launch argument keeps only its first line
+            UIPasteboard.general.string = copied.replacingOccurrences(of: "⏎", with: "\n")
         }
         NotificationCenter.default.addObserver(forName: .artemisConnectingCancelled, object: nil, queue: nil) { _ in
             lock.withLock { lastCancel = Date() }

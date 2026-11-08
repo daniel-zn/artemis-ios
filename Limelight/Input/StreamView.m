@@ -588,6 +588,10 @@ static const double X1_MOUSE_SPEED_DIVISOR = 2.5;
     
     if (@available(iOS 13.4, tvOS 13.4, *)) {
         for (UIPress* press in presses) {
+            if (self.pasteKey != nil && self.pasteKey(press, YES)) {
+                handled = YES;
+                continue;
+            }
             // For now, we'll treated it as handled if we handle at least one of the
             // UIPress events inside the set.
             if ([KeyboardSupport sendKeyEventForPress:press down:YES]) {
@@ -607,6 +611,10 @@ static const double X1_MOUSE_SPEED_DIVISOR = 2.5;
     
     if (@available(iOS 13.4, tvOS 13.4, *)) {
         for (UIPress* press in presses) {
+            if (self.pasteKey != nil && self.pasteKey(press, NO)) {
+                handled = YES;
+                continue;
+            }
             // For now, we'll treated it as handled if we handle at least one of the
             // UIPress events inside the set.
             if ([KeyboardSupport sendKeyEventForPress:press down:NO]) {

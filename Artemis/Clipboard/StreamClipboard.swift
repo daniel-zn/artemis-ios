@@ -47,8 +47,28 @@ final class StreamClipboard: NSObject {
         }
     }
 
-    @objc func becameActive() { sync.becameActive() }
     @objc func resignedActive() { sync.resignedActive() }
+
+    /// Pasted with this text (the Paste control's, UIKit's paste): onto the PC's clipboard, then
+    /// `completion` with .ctrlV, or .type when the PC doesn't take it.
+    func paste(_ text: String, completion: @escaping (ClipboardSync.PasteStep) -> Void) {
+        sync.paste(text, completion: completion)
+    }
+
+    /// Ctrl+V: a new copy here goes onto the PC's clipboard first (read only then).
+    func pasteKey(completion: @escaping (ClipboardSync.PasteStep) -> Void) {
+        sync.pasteKey(completion: completion)
+    }
+
+    /// Reads of the general pasteboard's text this run (each can bring up "Allow Paste"),
+    /// for the UI tests: none when a session starts or comes back.
+    static private(set) var pasteboardReads = 0
+
+    /// The pasteboard's text, read now (counted).
+    static func readPasteboard() -> String? {
+        pasteboardReads += 1
+        return UIPasteboard.general.string
+    }
 
     /// The last fetch before the session goes; `completion` on the main queue (within 2 s).
     @objc func streamEnding(_ completion: @escaping () -> Void) {
@@ -79,11 +99,11 @@ private final class HttpClipboardLink: ClipboardHostLink {
 }
 
 /// changeCount and hasStrings don't bring up "Allow Paste" or the "pasted from" notice; only
-/// readString does, and ClipboardSyncState calls it only for a new copy with text.
+/// readString does, and ClipboardSyncState calls it only on Ctrl+V for a new copy with text.
 private final class GeneralPasteboard: LocalPasteboard {
     var changeCount: Int { UIPasteboard.general.changeCount }
     var hasStrings: Bool { UIPasteboard.general.hasStrings }
-    func readString() -> String? { UIPasteboard.general.string }
+    func readString() -> String? { StreamClipboard.readPasteboard() }
     func write(_ string: String) { UIPasteboard.general.string = string }
 }
 

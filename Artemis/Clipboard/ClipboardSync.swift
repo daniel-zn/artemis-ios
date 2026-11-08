@@ -6,8 +6,10 @@
 //  /actions/clipboard?type=text (the one the Mac app and Artemis for Android use; it needs the
 //  client's clipboard_read / clipboard_set permissions in Apollo and a running session).
 //
-//  iPhone → PC: when the session starts and when the app comes back to it (the pasteboard is
-//  read only then, and only if it changed and has text). PC → iPhone: every couple of seconds,
+//  iPhone → PC: only when Daniel pastes in the session (the Paste control, UIKit's paste, ⌘V,
+//  Ctrl+V): the text goes onto the PC's clipboard, then Ctrl+V pastes it there. Nothing reads
+//  the pasteboard when the session starts or comes back, so iOS never asks "Allow Paste" for
+//  that. PC → iPhone: every couple of seconds,
 //  shortly after Ctrl+C or Ctrl+X goes to the PC, when the app leaves the foreground and when
 //  the session ends. Requests run one at a time on a worker queue; everything else, the state
 //  and the pasteboard, on the main queue. Foundation only: Scripts/clipboard-tests.sh builds it
@@ -40,6 +42,7 @@ protocol ClipboardKnownCountStore: AnyObject {
 
 final class ClipboardSync {
     typealias Result = ClipboardSyncState.Result
+    typealias PasteStep = ClipboardSyncState.PasteStep
 
     private let hostID: String
     private let link: ClipboardHostLink
@@ -75,21 +78,14 @@ final class ClipboardSync {
 
     // MARK: Session events (main queue)
 
-    /// The session is up: learn what the PC has, send what was copied here, then keep watching.
+    /// The session is up: learn what the PC has, then keep watching. The pasteboard isn't read.
     func streamStarted() {
         fetch()
-        sendLocal()
         let timer = DispatchSource.makeTimerSource(queue: .main)
         timer.schedule(deadline: .now() + pollInterval, repeating: pollInterval, leeway: .milliseconds(200))
         timer.setEventHandler { [weak self] in self?.fetch() }
         timer.resume()
         pollTimer = timer
-    }
-
-    /// Back in the session from elsewhere (Control Center, another app beside it).
-    func becameActive() {
-        guard !ended else { return }
-        sendLocal()
     }
 
     /// Leaving the foreground: bring the PC's last copy over while it still answers.
@@ -128,26 +124,43 @@ final class ClipboardSync {
         DispatchQueue.main.asyncAfter(deadline: .now() + timeout) { finish() }
     }
 
-    // MARK: Requests
+    // MARK: Paste (main queue)
 
-    private func sendLocal() {
+    /// Pasted with this text, read just now (the Paste control's, UIKit's paste): `completion`
+    /// on the main queue with .ctrlV once it's on the PC's clipboard, or .type / .nothing.
+    func paste(_ text: String, completion: @escaping (PasteStep) -> Void) {
+        let step = state.paste(text, changeCount: pasteboard.changeCount)
+        store.setKnownCount(pasteboard.changeCount, for: hostID)
+        run(step, completion: completion)
+    }
+
+    /// Ctrl+V: what was copied here since we last knew goes onto the PC's clipboard first (the
+    /// pasteboard is read only then); `completion` as for paste.
+    func pasteKey(completion: @escaping (PasteStep) -> Void) {
         let board = pasteboard
-        guard let text = state.localToSend(changeCount: board.changeCount, hasStrings: board.hasStrings, read: board.readString) else {
-            store.setKnownCount(state.localKnownCount ?? board.changeCount, for: hostID)
+        let step = state.pasteKey(changeCount: board.changeCount, hasStrings: board.hasStrings, read: board.readString)
+        store.setKnownCount(state.localKnownCount ?? board.changeCount, for: hostID)
+        run(step, completion: completion)
+    }
+
+    private func run(_ step: PasteStep, completion: @escaping (PasteStep) -> Void) {
+        guard case .send(let text) = step, !ended else {
+            if case .send(let text) = step { completion(.type(text)) } else { completion(step) }
             return
         }
-        store.setKnownCount(board.changeCount, for: hostID)
         let body = Data(ClipboardSyncState.toWire(text).utf8)
         worker.async { [weak self, link, timeout] in
             let status = link.setClipboard(body, timeout: timeout)
             let result = ClipboardSyncState.result(status: status, body: nil)
             DispatchQueue.main.async {
-                guard let self else { return }
-                self.log("Clipboard: sent \(body.count) bytes to the PC: \(Self.describe(result, status: status))")
-                self.state.endSend(text, result: result)
+                guard let self else { return completion(.type(text)) }
+                self.log("Clipboard: pasted \(body.count) bytes onto the PC's clipboard: \(Self.describe(result, status: status))")
+                completion(self.state.endPaste(text, result: result))
             }
         }
     }
+
+    // MARK: Requests
 
     private func fetch(after delay: TimeInterval = 0) {
         guard state.canFetch, !fetchQueued, !ended else { return }

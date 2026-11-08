@@ -77,6 +77,14 @@ final class DesktopViewController: UIViewController {
     /// Called when the demo's recorded input or the view's state changes (UI tests).
     var recordedEvents: (() -> [String])?
 
+    /// The session's shared clipboard with the PC (nil: off, GeForce Experience, the demo):
+    /// pasting puts the text on the PC's clipboard, then Ctrl+V. Set by StreamFrameViewController.
+    @objc weak var clipboard: StreamClipboard?
+    /// What the pastes did (UI tests).
+    private var pasteLog: [String] = []
+    /// A hardware keyboard's V taken for a paste: its release doesn't go to the PC either.
+    private var takenPasteKey: UIKeyboardHIDUsage?
+
     @objc init(contentView: UIView, streamSize: CGSize, input: DesktopInput, title: String, localCursor: Bool) {
         self.contentView = contentView
         self.streamSize = streamSize.width > 0 && streamSize.height > 0 ? streamSize : CGSize(width: 1920, height: 1080)
@@ -149,8 +157,16 @@ final class DesktopViewController: UIViewController {
         keyCapture.onText = { [weak self] in self?.typed($0) }
         keyCapture.onDelete = { [weak self] in self?.sendKey(KeyCode.backspace) }
         keyCapture.onHardwareKey = { [weak self] press, down in
-            guard self?.input is MoonlightDesktopInput else { return false }
+            guard let self else { return false }
+            if self.pasteKeyPress(press, down: down) { return true }
+            guard self.input is MoonlightDesktopInput else { return false }
             return KeyboardSupport.sendKeyEvent(for: press, down: down)
+        }
+        // UIKit's paste (the edit menu, the iPad keyboard's shortcut bar): the text, unasked
+        keyCapture.onPaste = { [weak self] in
+            guard let self else { return }
+            self.releaseCommandOnPC()
+            if let text = StreamClipboard.readPasteboard() { self.paste(text) }
         }
         keyCapture.accessory = makeKeyRow()
         view.addSubview(keyCapture)
@@ -467,6 +483,78 @@ final class DesktopViewController: UIViewController {
         updateAccessibilityValue()
     }
 
+    // MARK: Paste
+
+    /// Pasted with this text, read just now (the Paste control, UIKit's paste): onto the PC's
+    /// clipboard, then Ctrl+V there; typed when the clipboard isn't shared with this PC or the
+    /// PC doesn't take it.
+    func paste(_ text: String) {
+        guard let clipboard else { return finishPaste(.type(text)) }
+        clipboard.paste(text) { [weak self] in self?.finishPaste($0) }
+    }
+
+    /// Ctrl+V or ⌘V on a keyboard, the menu's Paste: what was copied here since we last knew
+    /// goes onto the PC's clipboard first (the pasteboard is read only then), then Ctrl+V.
+    /// Not shared: ⌘V types the text, Ctrl+V is the PC's own paste.
+    private func pasteKey(typesWhenNotShared: Bool) {
+        if let clipboard {
+            clipboard.pasteKey { [weak self] in self?.finishPaste($0) }
+        } else if typesWhenNotShared {
+            if let text = StreamClipboard.readPasteboard() { finishPaste(.type(text)) }
+        } else {
+            finishPaste(.ctrlV)
+        }
+    }
+
+    private func finishPaste(_ step: ClipboardSync.PasteStep) {
+        switch step {
+        case .ctrlV:
+            input.keyStroke(KeyCode.letter("v"), modifiers: Modifier.ctrl.flag, nonNormalized: false)
+            pasteLog.append(FakePC.isEnabled ? "Ctrl+V after the PC got \(FakePC.clipboardReceived.count)" : "Ctrl+V")
+        case .type(let text):
+            type(text, modifiers: 0)
+            pasteLog.append("typed \(text.count)")
+        case .send, .nothing:
+            pasteLog.append("nothing")
+        }
+        updateAccessibilityValue()
+    }
+
+    /// A hardware keyboard's key before it goes to the PC: Ctrl+V and ⌘V paste (true: taken).
+    @objc func pasteKeyPress(_ press: UIPress, down: Bool) -> Bool {
+        guard let key = press.key else { return false }
+        if !down {
+            guard takenPasteKey == key.keyCode else { return false }
+            takenPasteKey = nil
+            return true
+        }
+        guard key.keyCode == .keyboardV else { return false }
+        let held = key.modifierFlags.intersection([.command, .control, .alternate, .shift])
+        if held == .command {
+            takenPasteKey = key.keyCode
+            releaseCommandOnPC()
+            pasteKey(typesWhenNotShared: true)
+            return true
+        }
+        if held == .control, clipboard != nil {
+            takenPasteKey = key.keyCode
+            pasteKey(typesWhenNotShared: false)
+            return true
+        }
+        return false
+    }
+
+    /// ⌘ went to the PC as the Windows key: up again, with an unassigned key between so
+    /// Windows doesn't open Start, before the paste's Ctrl+V.
+    private func releaseCommandOnPC() {
+        guard input is MoonlightDesktopInput else { return }
+        let mask: UInt16 = 0xE8
+        input.setKey(mask, down: true, modifiers: Modifier.win.flag)
+        input.setKey(mask, down: false, modifiers: Modifier.win.flag)
+        input.setKey(Modifier.win.keyCode, down: false, modifiers: 0)
+        input.setKey(0x5C, down: false, modifiers: 0) // VK_RWIN
+    }
+
     // MARK: Keys
 
     private func sendKey(_ keyCode: UInt16) {
@@ -538,6 +626,10 @@ final class DesktopViewController: UIViewController {
         let row = KeyRowView(session: session)
         row.onHighlightChange = { [weak self] in self?.updateAccessibilityValue() }
         row.onHide = { [weak self] in self?.setKeyboard(false) }
+        row.onPaste = { [weak self] text in
+            self?.haptic(.light)
+            self?.paste(text)
+        }
         keyRow = row
         return row
     }
@@ -615,13 +707,22 @@ final class DesktopViewController: UIViewController {
         }
         actions.resetZoom = { [weak self] in self?.resetZoomAnimated() }
         actions.shortcut = { [weak self] shortcut in
-            self?.input.keyStroke(shortcut.keyCode, modifiers: shortcut.flags, nonNormalized: false)
             self?.haptic(.light)
+            // The menu's Paste is Ctrl+V, with a new copy here on the PC's clipboard first
+            if shortcut.keyCode == KeyCode.letter("v") && shortcut.flags == Modifier.ctrl.flag {
+                self?.pasteKey(typesWhenNotShared: false)
+                return
+            }
+            self?.input.keyStroke(shortcut.keyCode, modifiers: shortcut.flags, nonNormalized: false)
             self?.updateAccessibilityValue()
+        }
+        actions.paste = { [weak self] text in
+            self?.haptic(.light)
+            self?.paste(text)
         }
         actions.typeClipboard = { [weak self] in
             // As keys too, so a copied password works on the sign-in screen
-            if let text = UIPasteboard.general.string, !text.isEmpty {
+            if let text = StreamClipboard.readPasteboard(), !text.isEmpty {
                 self?.type(text, modifiers: 0)
                 self?.updateAccessibilityValue()
             }
@@ -711,6 +812,11 @@ final class DesktopViewController: UIViewController {
         let packets = SessionAudio.shared.packetStats
         lines[0] += " · microphone " + (session.microphoneOn ? (session.microphoneMuted ? "muted" : "on") : "off")
             + " · mic packets \(packets.encoded) of \(packets.samples) samples"
+        lines[0] += " · pasteboard reads \(StreamClipboard.pasteboardReads) · pastes " + (pasteLog.isEmpty ? "none" : pasteLog.joined(separator: ", "))
+        if FakePC.isEnabled {
+            let got = FakePC.clipboardReceived.map { $0.replacingOccurrences(of: "\r\n", with: "⏎").replacingOccurrences(of: "·", with: "•") }
+            lines[0] += " · the PC's clipboard got [" + got.joined(separator: "|") + "]"
+        }
         if let keyRow {
             lines[0] += " · key highlights \(keyRow.highlightCount) · key down \(keyRow.highlightedKey ?? "none")"
             lines[0] += " · key growths \(keyRow.growths) · key strays \(keyRow.strays)"
@@ -1013,6 +1119,8 @@ final class TrackpadAreaView: UIView {
 /// Takes the iOS keyboard's typing (and a hardware keyboard's keys while it's up).
 final class KeyCaptureView: UIView, UIKeyInput {
     var onText: ((String) -> Void)?
+    /// UIKit's paste: reading the pasteboard then needs no "Allow Paste".
+    var onPaste: (() -> Void)?
     var onDelete: (() -> Void)?
     var onHardwareKey: ((UIPress, Bool) -> Bool)?
     var accessory: UIView?
@@ -1023,6 +1131,13 @@ final class KeyCaptureView: UIView, UIKeyInput {
     var hasText: Bool { true }
     func insertText(_ text: String) { onText?(text) }
     func deleteBackward() { onDelete?() }
+
+    override func canPerformAction(_ action: Selector, withSender sender: Any?) -> Bool {
+        if action == #selector(paste(_:)) { return onPaste != nil && UIPasteboard.general.hasStrings }
+        return super.canPerformAction(action, withSender: sender)
+    }
+
+    override func paste(_ sender: Any?) { onPaste?() }
 
     // Plain typing: no corrections, capitals or smart punctuation
     var autocorrectionType: UITextAutocorrectionType = .no

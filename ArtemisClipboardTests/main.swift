@@ -27,78 +27,70 @@ typealias State = ClipboardSyncState
 // MARK: - Decisions
 
 do {
-    // Reads the pasteboard only when it changed since we last knew it, and has text
+    // Paste with the text in hand (the Paste control, UIKit's paste): onto the PC, then Ctrl+V
     var state = State(localKnownCount: 5)
-    var reads = 0
-    let read: () -> String? = { reads += 1; return "hello" }
-    check("unchanged pasteboard isn't read", state.localToSend(changeCount: 5, hasStrings: true, read: read) == nil && reads == 0, "reads \(reads)")
-    check("changed pasteboard without text isn't read", state.localToSend(changeCount: 6, hasStrings: false, read: read) == nil && reads == 0, "reads \(reads)")
-    check("…and isn't looked at again", state.localKnownCount == 6, "\(String(describing: state.localKnownCount))")
-    let sent = state.localToSend(changeCount: 7, hasStrings: true, read: read)
-    check("changed pasteboard with text is read and sent", sent == "hello" && reads == 1, "\(String(describing: sent)) reads \(reads)")
-    check("the same copy isn't sent twice while it's on the way", state.localToSend(changeCount: 7, hasStrings: true, read: read) == nil && reads == 1, "reads \(reads)")
-    state.endSend("hello", result: .ok)
-    check("after it's sent the PC is known to have it", state.hostSeen == "hello")
-    check("…and the same copy isn't read again", state.localToSend(changeCount: 7, hasStrings: true, read: read) == nil && reads == 1, "reads \(reads)")
-    check("copied again with the same text: read but not sent", state.localToSend(changeCount: 8, hasStrings: true, read: read) == nil && reads == 2, "reads \(reads)")
-}
-
-do {
-    // A never-seen pasteboard (first session since install) is read once
-    var state = State(localKnownCount: nil)
-    var reads = 0
-    check("first session reads the pasteboard", state.localToSend(changeCount: 1, hasStrings: true, read: { reads += 1; return "a" }) == "a" && reads == 1)
-}
-
-do {
-    // Empty, refused (the "Allow Paste" question answered no) or too big: read once, never sent
-    var state = State(localKnownCount: 0)
-    check("refused read sends nothing", state.localToSend(changeCount: 1, hasStrings: true, read: { nil }) == nil)
-    check("…and isn't asked again for the same copy", state.localToSend(changeCount: 1, hasStrings: true, read: { "x" }) == nil)
-    check("empty text isn't sent", state.localToSend(changeCount: 2, hasStrings: true, read: { "" }) == nil)
+    check("paste: the text goes to the PC", state.paste("hello", changeCount: 6) == .send("hello"))
+    check("paste: …and the pasteboard counts as known", state.localKnownCount == 6, "\(String(describing: state.localKnownCount))")
+    check("paste: on the PC's clipboard, then Ctrl+V", state.endPaste("hello", result: .ok) == .ctrlV)
+    check("paste: the PC is known to have it", state.hostSeen == "hello")
+    check("paste again: already on the PC, Ctrl+V alone", state.paste("hello", changeCount: 6) == .ctrlV)
+    check("paste of nothing does nothing", state.paste("", changeCount: 6) == .nothing)
     let big = String(repeating: "é", count: State.maxBytes / 2 + 1) // 2 bytes each in UTF-8
-    check("text over 1 MiB isn't sent", state.localToSend(changeCount: 3, hasStrings: true, read: { big }) == nil)
+    check("paste over 1 MiB does nothing", state.paste(big, changeCount: 7) == .nothing)
     let fits = String(repeating: "a", count: State.maxBytes)
-    check("text of exactly 1 MiB is sent", state.localToSend(changeCount: 4, hasStrings: true, read: { fits }) == fits)
+    check("paste of exactly 1 MiB goes", state.paste(fits, changeCount: 8) == .send(fits))
 }
 
 do {
-    // A failed send is tried again at the next trigger without reading the pasteboard again
+    // The PC doesn't take it: typed instead, and refusals turn sending off
     var state = State(localKnownCount: 0)
-    var reads = 0
-    let read: () -> String? = { reads += 1; return "retry me" }
-    _ = state.localToSend(changeCount: 1, hasStrings: true, read: read)
-    state.endSend("retry me", result: .failed)
-    check("failed send isn't known to be on the PC", state.hostSeen == nil)
-    let again = state.localToSend(changeCount: 1, hasStrings: true, read: read)
-    check("failed send goes again unread", again == "retry me" && reads == 1, "\(String(describing: again)) reads \(reads)")
-}
-
-do {
-    // Text the PC already has isn't sent
-    var state = State(localKnownCount: 0)
-    _ = state.endFetch(.ok, wire: "same", changeCountAtRequest: 0, changeCountNow: 0)
-    check("text the PC has isn't sent", state.localToSend(changeCount: 1, hasStrings: true, read: { "same" }) == nil)
-}
-
-do {
-    // Refused permission (401) turns that direction off; a PC without the endpoint, both
-    var state = State(localKnownCount: 0)
-    _ = state.localToSend(changeCount: 1, hasStrings: true, read: { "a" })
-    state.endSend("a", result: .denied)
-    var reads = 0
-    check("no clipboard_set: nothing read or sent after", state.localToSend(changeCount: 2, hasStrings: true, read: { reads += 1; return "b" }) == nil && reads == 0)
+    _ = state.paste("a", changeCount: 1)
+    check("no answer: typed", state.endPaste("a", result: .failed) == .type("a"))
+    check("no answer: the PC isn't known to have it", state.hostSeen == nil)
+    check("no answer: the next paste tries again", state.paste("a", changeCount: 1) == .send("a"))
+    check("no clipboard_set: typed", state.endPaste("a", result: .denied) == .type("a"))
+    check("no clipboard_set: later pastes are typed without asking", state.paste("b", changeCount: 2) == .type("b"))
     check("no clipboard_set: fetching still goes on", state.canFetch)
-
-    var reading = State(localKnownCount: 0)
-    _ = reading.endFetch(.denied, wire: nil, changeCountAtRequest: 0, changeCountNow: 0)
-    check("no clipboard_read: no more fetches", !reading.canFetch)
-    check("no clipboard_read: sending still goes on", reading.localToSend(changeCount: 1, hasStrings: true, read: { "a" }) == "a")
+    var reads = 0
+    check("no clipboard_set: Ctrl+V is the PC's own, unread",
+          state.pasteKey(changeCount: 3, hasStrings: true, read: { reads += 1; return "c" }) == .ctrlV && reads == 0, "reads \(reads)")
 
     var old = State(localKnownCount: 0)
     _ = old.endFetch(.unsupported, wire: nil, changeCountAtRequest: 0, changeCountNow: 0)
     check("PC without the endpoint: no fetches", !old.canFetch)
-    check("PC without the endpoint: nothing read or sent", old.localToSend(changeCount: 1, hasStrings: true, read: { "a" }) == nil)
+    check("PC without the endpoint: a paste is typed", old.paste("a", changeCount: 1) == .type("a"))
+
+    var reading = State(localKnownCount: 0)
+    _ = reading.endFetch(.denied, wire: nil, changeCountAtRequest: 0, changeCountNow: 0)
+    check("no clipboard_read: no more fetches", !reading.canFetch)
+    check("no clipboard_read: pasting still goes to the PC", reading.paste("a", changeCount: 1) == .send("a"))
+}
+
+do {
+    // Ctrl+V reads the pasteboard only when it changed since we last knew it, and has text
+    var state = State(localKnownCount: 5)
+    var reads = 0
+    let read: () -> String? = { reads += 1; return "hello" }
+    check("Ctrl+V, unchanged pasteboard: unread, the PC's own paste",
+          state.pasteKey(changeCount: 5, hasStrings: true, read: read) == .ctrlV && reads == 0, "reads \(reads)")
+    check("Ctrl+V, changed without text: unread", state.pasteKey(changeCount: 6, hasStrings: false, read: read) == .ctrlV && reads == 0)
+    check("…and isn't looked at again", state.localKnownCount == 6, "\(String(describing: state.localKnownCount))")
+    check("Ctrl+V, a new copy with text: read and sent", state.pasteKey(changeCount: 7, hasStrings: true, read: read) == .send("hello") && reads == 1)
+    _ = state.endPaste("hello", result: .ok)
+    check("Ctrl+V again: unread", state.pasteKey(changeCount: 7, hasStrings: true, read: read) == .ctrlV && reads == 1, "reads \(reads)")
+    check("copied again with the same text: read, Ctrl+V alone", state.pasteKey(changeCount: 8, hasStrings: true, read: read) == .ctrlV && reads == 2)
+    check("Ctrl+V, read refused (\"Don't Allow\"): the PC's own paste", state.pasteKey(changeCount: 9, hasStrings: true, read: { nil }) == .ctrlV)
+    check("…and isn't asked again for the same copy", state.pasteKey(changeCount: 9, hasStrings: true, read: { "x" }) == .ctrlV)
+
+    var first = State(localKnownCount: nil)
+    check("first session ever: Ctrl+V reads the pasteboard", first.pasteKey(changeCount: 1, hasStrings: true, read: { "a" }) == .send("a"))
+}
+
+do {
+    // What the PC has, and what came from it, isn't sent back
+    var state = State(localKnownCount: 0)
+    _ = state.endFetch(.ok, wire: "same", changeCountAtRequest: 0, changeCountNow: 0)
+    check("pasting text the PC has: Ctrl+V alone", state.paste("same", changeCount: 1) == .ctrlV)
 }
 
 do {
@@ -109,7 +101,8 @@ do {
     check("unchanged PC clipboard isn't written", state.endFetch(.ok, wire: "old", changeCountAtRequest: 3, changeCountNow: 3) == nil)
     check("a copy on the PC is written here", state.endFetch(.ok, wire: "new", changeCountAtRequest: 3, changeCountNow: 3) == "new")
     state.didWriteLocal(changeCount: 4)
-    check("…and our own write isn't read back", state.localToSend(changeCount: 4, hasStrings: true, read: { "new" }) == nil)
+    var reads = 0
+    check("…and our own write isn't read back on Ctrl+V", state.pasteKey(changeCount: 4, hasStrings: true, read: { reads += 1; return "new" }) == .ctrlV && reads == 0)
     check("…nor written again", state.endFetch(.ok, wire: "new", changeCountAtRequest: 4, changeCountNow: 4) == nil)
     check("CRLF on the wire, LF here", state.endFetch(.ok, wire: "a\r\nb", changeCountAtRequest: 4, changeCountNow: 4) == "a\nb")
     check("copied here while the fetch was out: the newer copy here wins",
@@ -124,9 +117,9 @@ do {
     // What we sent comes back on the next fetch: not written back (no echo)
     var state = State(localKnownCount: 0)
     _ = state.endFetch(.ok, wire: "before", changeCountAtRequest: 0, changeCountNow: 0)
-    let sent = state.localToSend(changeCount: 1, hasStrings: true, read: { "line1\nline2" })
-    check("sent text goes as CRLF", sent.map(State.toWire) == "line1\r\nline2")
-    state.endSend(sent!, result: .ok)
+    let sent = state.paste("line1\nline2", changeCount: 1)
+    check("sent text goes as CRLF", State.toWire("line1\nline2") == "line1\r\nline2" && sent == .send("line1\nline2"))
+    _ = state.endPaste("line1\nline2", result: .ok)
     check("what we sent isn't written back", state.endFetch(.ok, wire: "line1\r\nline2", changeCountAtRequest: 1, changeCountNow: 1) == nil)
 }
 
@@ -159,32 +152,51 @@ func makeSync(host: FakeHost, board: FakePasteboard, store: FakeStore, hostID: S
     ClipboardSync(hostID: hostID, link: host, pasteboard: board, store: store, pollInterval: 0.2, copyDelay: 0.05, timeout: 0.5)
 }
 
+/// Pastes and waits for the outcome.
+func paste(_ sync: ClipboardSync, _ text: String? = nil) -> ClipboardSync.PasteStep? {
+    var outcome: ClipboardSync.PasteStep?
+    if let text { sync.paste(text) { outcome = $0 } } else { sync.pasteKey { outcome = $0 } }
+    pump { outcome != nil }
+    return outcome
+}
+
 do {
-    // iPhone → PC at the start; PC → iPhone from the polls; nothing echoes
+    // The session starts and comes back: the pasteboard isn't read; it is when pasting
     let host = FakeHost(clipboard: "on the PC before")
     let board = FakePasteboard(text: "copied on the iPhone")
     let store = FakeStore()
     let sync = makeSync(host: host, board: board, store: store)
     sync.streamStarted()
-    pump { host.clipboard == "copied on the iPhone" }
-    check("session start: the iPhone's text reaches the PC", host.clipboard == "copied on the iPhone", host.clipboard)
+    pump { host.gets >= 1 }
+    idle() // several polls
+    check("session start: the pasteboard isn't read", board.reads == 0, "\(board.reads)")
+    check("session start: nothing goes to the PC", host.posts.isEmpty, "\(host.posts)")
     check("session start: the PC's older text doesn't come over", board.text == "copied on the iPhone", board.text ?? "nil")
-    check("session start: the pasteboard is read once", board.reads == 1, "\(board.reads)")
+    sync.resignedActive() // Control Center, another app
+    board.copy("copied in another app")
+    idle()
+    check("back in the session: the pasteboard isn't read", board.reads == 0 && host.posts.isEmpty, "reads \(board.reads) posts \(host.posts)")
+
+    // The Paste control: the text it hands over goes to the PC, then Ctrl+V
+    check("Paste: Ctrl+V once the text is on the PC", paste(sync, "copied in another app") == .ctrlV)
+    check("Paste: the PC got the text", host.posts == ["copied in another app"], "\(host.posts)")
+    check("Paste: the pasteboard isn't read by the app (the control hands the text over)", board.reads == 0, "\(board.reads)")
+    check("Paste again: Ctrl+V without sending again", paste(sync, "copied in another app") == .ctrlV && host.posts.count == 1, "\(host.posts)")
+    check("Ctrl+V after Paste: the pasteboard isn't read again", paste(sync) == .ctrlV && board.reads == 0, "\(board.reads)")
+
+    // Ctrl+V on a keyboard: a new copy is read then, sent, then Ctrl+V
+    board.copy("line 1\nline 2")
+    check("Ctrl+V, new copy: Ctrl+V once it's on the PC", paste(sync) == .ctrlV)
+    check("Ctrl+V, new copy: read once and sent as CRLF", board.reads == 1 && host.posts.last == "line 1\r\nline 2", "reads \(board.reads) \(host.posts)")
 
     host.clipboard = "copied on the PC\r\nsecond line"
     pump { board.text == "copied on the PC\nsecond line" }
     check("while streaming: a copy on the PC lands on the iPhone", board.text == "copied on the PC\nsecond line", board.text ?? "nil")
-    let posts = host.posts.count
     let writes = board.writes
-    sync.becameActive()
-    idle() // let the polls run a while
-    check("back in the session: our own write isn't read or sent back", board.reads == 1 && host.posts.count == posts, "reads \(board.reads) posts \(host.posts.count)")
+    idle()
     check("the same PC text isn't written twice", board.writes == writes, "\(board.writes)")
-
-    board.copy("copied on the iPhone again")
-    sync.becameActive()
-    pump { host.clipboard == "copied on the iPhone again" }
-    check("back in the session: a new copy goes to the PC", host.clipboard == "copied on the iPhone again" && board.reads == 2, "\(host.clipboard) reads \(board.reads)")
+    check("Ctrl+V after the PC's copy came over: not read or sent back", paste(sync) == .ctrlV && board.reads == 1 && host.posts.count == 2,
+          "reads \(board.reads) posts \(host.posts.count)")
 
     host.clipboard = "last copy on the PC"
     var ended = false
@@ -194,46 +206,74 @@ do {
     let gets = host.gets
     idle()
     check("after leaving: no more polls", host.gets == gets, "\(host.gets) after \(gets)")
+    check("after leaving: a paste is typed, not sent", paste(sync, "late") == .type("late") && host.posts.count == 2)
 
-    // The next session with the same PC: the unchanged pasteboard isn't read
+    // The next session with the same PC: Ctrl+V doesn't read the unchanged pasteboard
     let next = makeSync(host: host, board: board, store: store)
     next.streamStarted()
-    pump { host.gets > gets }
     idle()
-    check("next session: unchanged pasteboard isn't read", board.reads == 2, "\(board.reads)")
+    check("next session: Ctrl+V, unchanged pasteboard isn't read", paste(next) == .ctrlV && board.reads == 1, "\(board.reads)")
     var nextEnded = false
     next.streamEnding { nextEnded = true }
     pump { nextEnded }
 
-    // Another PC hasn't got it: read and sent there
+    // Another PC hasn't got it: read and sent there on Ctrl+V
     let other = FakeHost(clipboard: "")
     let third = makeSync(host: other, board: board, store: store, hostID: "other pc")
     third.streamStarted()
-    pump { other.clipboard == "last copy on the PC" }
-    check("another PC gets the pasteboard's text", other.clipboard == "last copy on the PC" && board.reads == 3, "\(other.clipboard) reads \(board.reads)")
+    idle()
+    check("another PC: nothing read at the start", board.reads == 1, "\(board.reads)")
+    check("another PC: Ctrl+V reads and sends the pasteboard's text",
+          paste(third) == .ctrlV && other.posts == ["last copy on the PC"] && board.reads == 2, "\(other.posts) reads \(board.reads)")
     var thirdEnded = false
     third.streamEnding { thirdEnded = true }
     pump { thirdEnded }
 }
 
 do {
-    // Without Apollo's permissions: quietly nothing that way, no repeated requests
+    // Without Apollo's permissions: quietly nothing that way, no repeated requests; Paste types
     let host = FakeHost(clipboard: "pc", getStatus: 401, postStatus: 401)
     let board = FakePasteboard(text: "phone")
     let sync = makeSync(host: host, board: board, store: FakeStore())
     sync.streamStarted()
-    pump { host.posts.count == 1 }
+    pump { host.gets == 1 }
     idle()
-    check("no permissions: one fetch, one send, then quiet", host.gets == 1 && host.posts.count == 1, "gets \(host.gets) posts \(host.posts.count)")
+    check("no permissions: one fetch, nothing sent, then quiet", host.gets == 1 && host.posts.isEmpty, "gets \(host.gets) posts \(host.posts.count)")
     check("no permissions: nothing written here", board.text == "phone" && board.writes == 0)
-    board.copy("phone 2")
-    sync.becameActive()
-    idle()
-    check("no clipboard_set: a new copy isn't even read", board.reads == 1 && host.posts.count == 1, "reads \(board.reads)")
+    check("no clipboard_set: Paste types the text", paste(sync, "phone") == .type("phone") && host.posts.count == 1)
+    check("no clipboard_set: the next Paste is typed without asking the PC", paste(sync, "phone 2") == .type("phone 2") && host.posts.count == 1)
+    board.copy("phone 3")
+    check("no clipboard_set: Ctrl+V is the PC's own, the copy unread", paste(sync) == .ctrlV && board.reads == 0, "reads \(board.reads)")
     var ended = false
     sync.streamEnding { ended = true }
     pump { ended }
     check("no clipboard_read: leaving doesn't ask", host.gets == 1 && ended, "\(host.gets)")
+}
+
+do {
+    // A PC without the endpoint (Sunshine): Paste types
+    let host = FakeHost(clipboard: "", getStatus: 404, postStatus: 404)
+    let sync = makeSync(host: host, board: FakePasteboard(text: nil), store: FakeStore())
+    sync.streamStarted()
+    pump { host.gets == 1 }
+    check("PC without the endpoint: Paste types", paste(sync, "typed") == .type("typed") && host.posts.isEmpty, "\(host.posts)")
+    var ended = false
+    sync.streamEnding { ended = true }
+    pump { ended }
+}
+
+do {
+    // A PC that doesn't answer the send: typed after the time limit
+    let host = FakeHost(clipboard: "pc")
+    let sync = makeSync(host: host, board: FakePasteboard(text: nil), store: FakeStore())
+    sync.streamStarted()
+    pump { host.gets == 1 }
+    host.hang = true
+    check("silent PC: Paste is typed", paste(sync, "typed anyway") == .type("typed anyway"))
+    host.hang = false
+    var ended = false
+    sync.streamEnding { ended = true }
+    pump { ended }
 }
 
 do {

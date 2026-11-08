@@ -202,6 +202,9 @@
     _streamView.pointerMoved = ^(CGPoint normalized) {
         [desktop pointerMovedExternallyTo:normalized];
     };
+    _streamView.pasteKey = ^BOOL(UIPress* press, BOOL down) {
+        return [desktop pasteKeyPress:press down:down];
+    };
     [self addChildViewController:_desktop];
     _desktop.view.frame = self.view.bounds;
     _desktop.view.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
@@ -334,6 +337,7 @@
     // The PC's last copy comes over first, while the PC still answers for the session
     ArtemisStreamClipboard* clipboard = _clipboard;
     _clipboard = nil;
+    _desktop.clipboard = nil;
     if (clipboard != nil && !_terminated) {
         [clipboard streamEnding:^{
             (void)clipboard;
@@ -397,9 +401,6 @@
 }
 
 - (void)applicationDidBecomeActive:(NSNotification *)notification {
-    // Copied in another app meanwhile: to the PC
-    [_clipboard becameActive];
-
     // Stop the background timer, since we're foregrounded again
     if (_inactivityTimer != nil) {
         Log(LOG_I, @"Stopping inactivity timer after becoming active again");
@@ -436,6 +437,7 @@
         self->_connected = YES;
         self->_clipboard = [[ArtemisStreamClipboard alloc] initWithConfig:self.streamConfig];
         [self->_clipboard streamStarted];
+        self->_desktop.clipboard = self->_clipboard;
         // Leave the spinner spinning until it's obscured by
         // the first frame of video.
         self->_stageLabel.hidden = YES;
@@ -748,6 +750,7 @@
     if (_clipboard == nil && !_exiting && [ArtemisStreamClipboard startsWithoutStream]) {
         _clipboard = [[ArtemisStreamClipboard alloc] initWithConfig:self.streamConfig];
         [_clipboard streamStarted];
+        _desktop.clipboard = _clipboard;
     }
 }
 

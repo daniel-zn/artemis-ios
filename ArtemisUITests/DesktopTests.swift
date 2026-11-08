@@ -175,7 +175,8 @@ final class DesktopTests: XCTestCase {
     }
 
     /// Windows' sign-in screen takes only key events, not Unicode text: a password typed on the
-    /// iOS keyboard, or typed from the clipboard, goes as keys (Shift for capitals and "!").
+    /// iOS keyboard, typed from the clipboard, or pasted with the bar's Paste where no clipboard
+    /// is shared, goes as keys (Shift for capitals and "!").
     func testTypedPassword() {
         let tag = "\(appearance)-portrait-L-password"
         // The app puts it on the clipboard (the test runner can't from the background)
@@ -204,6 +205,17 @@ final class DesktopTests: XCTestCase {
         if allow.waitForExistence(timeout: 3) { allow.tap() }
         sleep(1)
         XCTAssertEqual(events(desktop, since: count), password, "\(tag) clipboard")
+
+        // The bar's Paste (iOS's paste control, no question): the demo shares no clipboard
+        // with a PC, so it types the text too
+        count = state(desktop).count
+        let paste = app.buttons["bar.paste"]
+        XCTAssertTrue(paste.waitForExistence(timeout: 5), "\(tag): no Paste in the bar")
+        paste.tap()
+        let deadline = Date().addingTimeInterval(5)
+        while events(desktop, since: count).count < password.count && Date() < deadline { usleep(200_000) }
+        XCTAssertEqual(events(desktop, since: count), password, "\(tag) Paste")
+        XCTAssertFalse(XCUIApplication(bundleIdentifier: "com.apple.springboard").buttons["Allow Paste"].exists, "\(tag): iOS asked for Paste")
         app.terminate()
     }
 
