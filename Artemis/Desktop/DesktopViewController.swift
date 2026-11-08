@@ -216,6 +216,12 @@ final class DesktopViewController: UIViewController {
         microphoneChanged()
         center.addObserver(self, selector: #selector(keyboardChanged), name: UIResponder.keyboardDidHideNotification, object: nil)
         center.addObserver(self, selector: #selector(keyboardChanged), name: UIResponder.keyboardDidShowNotification, object: nil)
+        // The session's clipboard writes the PC's copies from its poll, between any other updates
+        center.addObserver(self, selector: #selector(pasteboardChanged), name: UIPasteboard.changedNotification, object: nil)
+        updateAccessibilityValue()
+    }
+
+    @objc private func pasteboardChanged() {
         updateAccessibilityValue()
     }
 
