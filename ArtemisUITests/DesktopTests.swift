@@ -510,13 +510,15 @@ final class DesktopTests: XCTestCase {
             XCTAssertFalse(under().isEmpty, "\(tag): no key reaches under the hide button (keys cut off to its left)")
             shot("\(tag)-1-open")
 
-            // Scrolled to the end, the last key sits whole beside the button, which hasn't moved
+            // Scrolled to the end, the last key sits whole beside Paste (just left of the button), which hasn't moved
             for _ in 0..<4 {
                 XCTAssertTrue(MultiTouch.timed([(CGPoint(x: window.midX + 60, y: hideFrame.midY), CGVector(dx: -260, dy: 0), 0, 0.25, 0)], testCase: self))
             }
             let last = settledFrame(app.buttons["key.PgDn"])
-            XCTAssertLessThanOrEqual(last.maxX, hideFrame.minX, "\(tag): the last key stays under the button (\(last), button \(hideFrame))")
-            XCTAssertGreaterThan(last.maxX, hideFrame.minX - 40, "\(tag): a gap after the last key (\(last), button \(hideFrame))")
+            let pasteFrame = app.buttons["key.paste"].frame
+            XCTAssertLessThan(pasteFrame.maxX, hideFrame.minX, "\(tag): Paste isn't left of the hide button (\(pasteFrame), button \(hideFrame))")
+            XCTAssertLessThanOrEqual(last.maxX, pasteFrame.minX, "\(tag): the last key stays under Paste (\(last), Paste \(pasteFrame))")
+            XCTAssertGreaterThan(last.maxX, pasteFrame.minX - 40, "\(tag): a gap after the last key (\(last), Paste \(pasteFrame))")
             XCTAssertEqual(hide.frame, hideFrame, "\(tag): the hide button moved with the keys")
             shot("\(tag)-2-scrolled-to-end")
 
