@@ -73,10 +73,12 @@ final class ClipboardTests: XCTestCase {
 
     /// The session starts without reading the pasteboard (so iOS never asks "Allow Paste" then;
     /// the home screen ends a session, and coming back from Control Center reads nothing either:
-    /// Scripts/clipboard-tests.sh); the bar's Paste hands the copied text over without asking: it lands
-    /// on the PC's clipboard, then Ctrl+V goes to the PC. The PC's copy (TOWER answers "PC got:
-    /// <text>") comes back here once, no echo; what was on the PC before the session doesn't.
-    func testPasteSendsTextThenCtrlV() {
+    /// Scripts/clipboard-tests.sh). The bar has no Paste of its own: the shortcuts menu's Paste
+    /// reads the new copy then (iOS may ask then), puts it on the PC's clipboard, then Ctrl+V goes
+    /// to the PC. The PC's copy (TOWER answers "PC got: <text>") comes back here once, no echo;
+    /// what was on the PC before the session doesn't. Paste again, nothing new copied: the PC's own
+    /// paste, unread.
+    func testMenuPasteSendsTextThenCtrlV() {
         let copied = "copied on the iPhone \(UUID().uuidString.prefix(8))\nsecond line"
         let app = launch(share: true, copied: copied.replacingOccurrences(of: "\n", with: "⏎"))
         openStreamScreen(app)
@@ -85,27 +87,40 @@ final class ClipboardTests: XCTestCase {
         sleep(5)
         XCTAssertTrue(status(app).contains("pasteboard reads 0 · writes 0 · pastes none"), "read at the start: \(status(app))")
         XCTAssertTrue(status(app).contains("the PC's clipboard got []"), "sent at the start: \(status(app))")
+        XCTAssertFalse(app.buttons["bar.paste"].exists, "a Paste button in the bar")
 
-        // Paste in the bar: no question, the text onto the PC's clipboard, then Ctrl+V
-        let paste = app.buttons["bar.paste"]
-        if !paste.exists, app.buttons["bar.unfold"].exists { app.buttons["bar.unfold"].tap() }
-        XCTAssertTrue(paste.waitForExistence(timeout: 5), "no Paste in the bar")
-        XCTAssertTrue(paste.isEnabled, "Paste is dimmed with text copied")
-        paste.tap()
+        // ⌘ › Paste: read now, onto the PC's clipboard, then Ctrl+V
+        menuPaste(app)
         let wire = copied.replacingOccurrences(of: "\n", with: "⏎")
         XCTAssertTrue(waitForStatus(app, "pastes Ctrl+V after the PC got 1"), "no Ctrl+V after the text landed: \(status(app))")
         XCTAssertTrue(status(app).contains("the PC's clipboard got [\(wire)]"), "the PC didn't get the text: \(status(app))")
-        XCTAssertTrue(status(app).contains("pasteboard reads 0"), "the app read the pasteboard itself: \(status(app))")
-        XCTAssertFalse(XCUIApplication(bundleIdentifier: "com.apple.springboard").buttons["Allow Paste"].exists, "iOS asked")
+        XCTAssertTrue(status(app).contains("pasteboard reads 1 · "), "not read once: \(status(app))")
 
         // The PC's clipboard changed ("PC got: …"): it comes over once (the app's count of writes,
         // not changeCount: the Simulator also takes whatever is copied on the Mac)
         XCTAssertTrue(waitForStatus(app, "writes 1 · ", timeout: 20), "the PC's copy didn't come over: \(status(app))")
         sleep(5)
         XCTAssertTrue(status(app).contains("writes 1 · "), "the pasteboard kept changing: \(status(app))")
+
+        // Paste again: nothing new copied here, so Ctrl+V alone, unread
+        menuPaste(app)
+        XCTAssertTrue(waitForStatus(app, "Ctrl+V after the PC got 1, Ctrl+V after the PC got 1"), "second Paste: \(status(app))")
+        XCTAssertTrue(status(app).contains("pasteboard reads 1 · "), "the second Paste read the pasteboard: \(status(app))")
         disconnect(app)
         XCTAssertFalse(app.alerts.firstMatch.exists, "a message after the session: \(app.alerts.firstMatch.label)")
         app.terminate()
+    }
+
+    /// ⌘ in the bar, then Paste.
+    private func menuPaste(_ app: XCUIApplication) {
+        let shortcuts = app.buttons["bar.shortcuts"]
+        if !shortcuts.exists, app.buttons["bar.unfold"].exists { app.buttons["bar.unfold"].tap() }
+        XCTAssertTrue(shortcuts.waitForExistence(timeout: 5), "no ⌘ in the bar")
+        shortcuts.tap()
+        let paste = app.buttons["Paste"].firstMatch
+        XCTAssertTrue(paste.waitForExistence(timeout: 5), "no Paste in the shortcuts menu")
+        paste.tap()
+        allowPasteIfAsked()
     }
 
     /// A hardware keyboard: ⌘V reads the copied text then (only then), puts it on the PC's
@@ -132,17 +147,14 @@ final class ClipboardTests: XCTestCase {
         app.terminate()
     }
 
-    /// Sharing off: the bar's Paste types the text (as Type Clipboard), nothing goes to the PC's
-    /// clipboard.
-    func testPasteTypesWhenNotShared() {
-        let copied = "typed instead \(UUID().uuidString.prefix(8))"
-        let app = launch(share: false, copied: copied)
+    /// Sharing off: the shortcuts menu's Paste is the PC's own Ctrl+V; the pasteboard isn't read
+    /// and nothing goes to the PC's clipboard.
+    func testMenuPasteIsThePCsOwnWhenNotShared() {
+        let app = launch(share: false, copied: "not for the PC \(UUID().uuidString.prefix(8))")
         openStreamScreen(app)
-        let paste = app.buttons["bar.paste"]
-        if !paste.exists, app.buttons["bar.unfold"].exists { app.buttons["bar.unfold"].tap() }
-        XCTAssertTrue(paste.waitForExistence(timeout: 5), "no Paste in the bar")
-        paste.tap()
-        XCTAssertTrue(waitForStatus(app, "pastes typed \(copied.count)"), "not typed: \(status(app))")
+        menuPaste(app)
+        XCTAssertTrue(waitForStatus(app, "pastes Ctrl+V after the PC got 0"), "not Ctrl+V: \(status(app))")
+        XCTAssertTrue(status(app).contains("pasteboard reads 0 · writes 0 · "), "read with sharing off: \(status(app))")
         XCTAssertTrue(status(app).contains("the PC's clipboard got []"), "sent with sharing off: \(status(app))")
         disconnect(app)
         app.terminate()

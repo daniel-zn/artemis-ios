@@ -175,8 +175,7 @@ final class DesktopTests: XCTestCase {
     }
 
     /// Windows' sign-in screen takes only key events, not Unicode text: a password typed on the
-    /// iOS keyboard, typed from the clipboard, or pasted with the bar's Paste where no clipboard
-    /// is shared, goes as keys (Shift for capitals and "!").
+    /// iOS keyboard, or typed from the clipboard, goes as keys (Shift for capitals and "!").
     func testTypedPassword() {
         let tag = "\(appearance)-portrait-L-password"
         // The app puts it on the clipboard (the test runner can't from the background)
@@ -205,17 +204,6 @@ final class DesktopTests: XCTestCase {
         if allow.waitForExistence(timeout: 3) { allow.tap() }
         sleep(1)
         XCTAssertEqual(events(desktop, since: count), password, "\(tag) clipboard")
-
-        // The bar's Paste (iOS's paste control, no question): the demo shares no clipboard
-        // with a PC, so it types the text too
-        count = state(desktop).count
-        let paste = app.buttons["bar.paste"]
-        XCTAssertTrue(paste.waitForExistence(timeout: 5), "\(tag): no Paste in the bar")
-        paste.tap()
-        let deadline = Date().addingTimeInterval(5)
-        while events(desktop, since: count).count < password.count && Date() < deadline { usleep(200_000) }
-        XCTAssertEqual(events(desktop, since: count), password, "\(tag) Paste")
-        XCTAssertFalse(XCUIApplication(bundleIdentifier: "com.apple.springboard").buttons["Allow Paste"].exists, "\(tag): iOS asked for Paste")
         app.terminate()
     }
 
@@ -282,6 +270,8 @@ final class DesktopTests: XCTestCase {
                     let ink = inkUnderIcon(button)
                     XCTAssertLessThan(ink, 0.01, "\(tag): \(id) shows a caption under its icon (\(Int(ink * 100)) % ink)")
                 }
+                // No Paste of its own: the shortcuts menu's Paste (iOS's paste control drew a blank square on an iPhone)
+                XCTAssertFalse(app.buttons["bar.paste"].exists, "\(tag): a Paste button in the bar")
                 shot("\(tag)-1-bar")
                 app.terminate()
                 XCUIDevice.shared.orientation = .portrait
@@ -508,17 +498,16 @@ final class DesktopTests: XCTestCase {
                 }
             }
             XCTAssertFalse(under().isEmpty, "\(tag): no key reaches under the hide button (keys cut off to its left)")
+            XCTAssertFalse(app.buttons["key.paste"].exists, "\(tag): a Paste button in the key row")
             shot("\(tag)-1-open")
 
-            // Scrolled to the end, the last key sits whole beside Paste (just left of the button), which hasn't moved
+            // Scrolled to the end, the last key sits whole beside the button, which hasn't moved
             for _ in 0..<4 {
                 XCTAssertTrue(MultiTouch.timed([(CGPoint(x: window.midX + 60, y: hideFrame.midY), CGVector(dx: -260, dy: 0), 0, 0.25, 0)], testCase: self))
             }
             let last = settledFrame(app.buttons["key.PgDn"])
-            let pasteFrame = app.buttons["key.paste"].frame
-            XCTAssertLessThan(pasteFrame.maxX, hideFrame.minX, "\(tag): Paste isn't left of the hide button (\(pasteFrame), button \(hideFrame))")
-            XCTAssertLessThanOrEqual(last.maxX, pasteFrame.minX, "\(tag): the last key stays under Paste (\(last), Paste \(pasteFrame))")
-            XCTAssertGreaterThan(last.maxX, pasteFrame.minX - 40, "\(tag): a gap after the last key (\(last), Paste \(pasteFrame))")
+            XCTAssertLessThanOrEqual(last.maxX, hideFrame.minX, "\(tag): the last key stays under the button (\(last), button \(hideFrame))")
+            XCTAssertGreaterThan(last.maxX, hideFrame.minX - 40, "\(tag): a gap after the last key (\(last), button \(hideFrame))")
             XCTAssertEqual(hide.frame, hideFrame, "\(tag): the hide button moved with the keys")
             shot("\(tag)-2-scrolled-to-end")
 
