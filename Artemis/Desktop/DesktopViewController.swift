@@ -491,7 +491,7 @@ final class DesktopViewController: UIViewController {
 
     // MARK: Paste
 
-    /// Pasted with this text, read just now (the Paste control, UIKit's paste): onto the PC's
+    /// Pasted with this text, read just now (UIKit's paste): onto the PC's
     /// clipboard, then Ctrl+V there; typed when the clipboard isn't shared with this PC or the
     /// PC doesn't take it.
     func paste(_ text: String) {
@@ -632,10 +632,6 @@ final class DesktopViewController: UIViewController {
         let row = KeyRowView(session: session)
         row.onHighlightChange = { [weak self] in self?.updateAccessibilityValue() }
         row.onHide = { [weak self] in self?.setKeyboard(false) }
-        row.onPaste = { [weak self] text in
-            self?.haptic(.light)
-            self?.paste(text)
-        }
         keyRow = row
         return row
     }
@@ -721,10 +717,6 @@ final class DesktopViewController: UIViewController {
             }
             self?.input.keyStroke(shortcut.keyCode, modifiers: shortcut.flags, nonNormalized: false)
             self?.updateAccessibilityValue()
-        }
-        actions.paste = { [weak self] text in
-            self?.haptic(.light)
-            self?.paste(text)
         }
         actions.typeClipboard = { [weak self] in
             // As keys too, so a copied password works on the sign-in screen

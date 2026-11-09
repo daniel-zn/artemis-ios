@@ -6,8 +6,8 @@
 //  /actions/clipboard?type=text (the one the Mac app and Artemis for Android use; it needs the
 //  client's clipboard_read / clipboard_set permissions in Apollo and a running session).
 //
-//  iPhone → PC: only when Daniel pastes in the session (the Paste control, UIKit's paste, ⌘V,
-//  Ctrl+V): the text goes onto the PC's clipboard, then Ctrl+V pastes it there. Nothing reads
+//  iPhone → PC: only when Daniel pastes in the session (the shortcuts menu's Paste, UIKit's
+//  paste, ⌘V, Ctrl+V): the text goes onto the PC's clipboard, then Ctrl+V pastes it there. Nothing reads
 //  the pasteboard when the session starts or comes back, so iOS never asks "Allow Paste" for
 //  that. PC → iPhone: every couple of seconds,
 //  shortly after Ctrl+C or Ctrl+X goes to the PC, when the app leaves the foreground and when
@@ -126,7 +126,7 @@ final class ClipboardSync {
 
     // MARK: Paste (main queue)
 
-    /// Pasted with this text, read just now (the Paste control's, UIKit's paste): `completion`
+    /// Pasted with this text, read just now (UIKit's paste): `completion`
     /// on the main queue with .ctrlV once it's on the PC's clipboard, or .type / .nothing.
     func paste(_ text: String, completion: @escaping (PasteStep) -> Void) {
         let step = state.paste(text, changeCount: pasteboard.changeCount)

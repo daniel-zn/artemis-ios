@@ -5,8 +5,9 @@
 //  The decisions of the shared clipboard (plain text) with an Apollo PC, without any I/O
 //  (ClipboardSync does the requests and the pasteboard). As the Mac app's ClipboardSyncState,
 //  with iOS's pasteboard in mind: reading it can bring up "Allow Paste" or a "pasted from"
-//  notice, so it's read only when Daniel pastes in the session: the Paste control and UIKit's
-//  paste hand over the text themselves (no question), and Ctrl+V reads it only when its
+//  notice, so it's read only when Daniel pastes in the session: UIKit's paste (the edit menu)
+//  is the permission itself (no question), and Ctrl+V (a keyboard's, or the shortcuts menu's
+//  Paste) reads it only when its
 //  changeCount moved since we last knew it and it has text.
 //
 //  hostSeen is what the PC's clipboard was last known to hold (fetched, or sent by us): it's
@@ -59,7 +60,7 @@ struct ClipboardSyncState {
 
     // MARK: Paste
 
-    /// Pasted in the session with this text (the Paste control's, or UIKit's paste), read just
+    /// Pasted in the session with this text (UIKit's paste), read just
     /// now at `changeCount`.
     mutating func paste(_ text: String, changeCount: Int) -> PasteStep {
         localKnownCount = changeCount

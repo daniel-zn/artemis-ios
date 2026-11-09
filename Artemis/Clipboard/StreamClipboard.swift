@@ -49,7 +49,7 @@ final class StreamClipboard: NSObject {
 
     @objc func resignedActive() { sync.resignedActive() }
 
-    /// Pasted with this text (the Paste control's, UIKit's paste): onto the PC's clipboard, then
+    /// Pasted with this text (UIKit's paste): onto the PC's clipboard, then
     /// `completion` with .ctrlV, or .type when the PC doesn't take it.
     func paste(_ text: String, completion: @escaping (ClipboardSync.PasteStep) -> Void) {
         sync.paste(text, completion: completion)

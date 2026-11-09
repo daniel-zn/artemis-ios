@@ -46,8 +46,6 @@ final class DesktopSession {
         var toggleMicrophoneMute: () -> Void = {}
         var resetZoom: () -> Void = {}
         var shortcut: (Shortcut) -> Void = { _ in }
-        /// Text from the Paste control: to the PC's clipboard, then Ctrl+V.
-        var paste: (String) -> Void = { _ in }
         var typeClipboard: () -> Void = {}
         var key: (UInt16) -> Void = { _ in }
         var disconnect: () -> Void = {}

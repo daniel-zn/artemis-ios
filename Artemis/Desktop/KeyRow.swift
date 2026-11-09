@@ -4,8 +4,7 @@
 //
 //  The keys above the iOS keyboard (its input accessory): Esc, Tab, the sticky modifiers,
 //  arrows and editing keys, and a page of function keys. Fn, the page switch, is the first key
-//  and scrolls sideways with the others. Paste (iOS's paste control, PasteControl.swift) and the
-//  hide-keyboard button stay at the right end. A key lights up, grows and fires only on a real tap: a finger
+//  and scrolls sideways with the others. A key lights up, grows and fires only on a real tap: a finger
 //  that lands on a key and swipes the row along scrolls it instead (the scroll view delays and
 //  cancels the key's touch, as UIKit's own scroll views do). The hide-keyboard button stays at
 //  the right end on its own glass; the keys scroll on underneath it, fading out as they go, and
@@ -18,7 +17,6 @@ final class KeyRowView: UIInputView {
     private let session: DesktopSession
     private let pageButton = KeyButton(identifier: "key.page")
     private let hideButton = KeyButton(identifier: "key.hide")
-    private let pasteControl = PasteControlView(size: 38, cornerRadius: 10)
     private let scrollView = KeyScrollView()
     private var keys: [KeyButton] = []
     private var shownPage: DesktopSession.KeyPage?
@@ -35,11 +33,6 @@ final class KeyRowView: UIInputView {
     private var grown: Set<String> = [], strayed: Set<String> = []
     /// The hide button's tap.
     var onHide: (() -> Void)?
-    /// The copied text, from Paste.
-    var onPaste: ((String) -> Void)? {
-        get { pasteControl.onPaste }
-        set { pasteControl.onPaste = newValue }
-    }
 
     init(session: DesktopSession) {
         self.session = session
@@ -64,8 +57,6 @@ final class KeyRowView: UIInputView {
         hideButton.setKey(symbol: "keyboard.chevron.compact.down", accessibility: "Hide Keyboard")
         hideButton.addAction(UIAction { [weak self] _ in self?.onHide?() }, for: .primaryActionTriggered)
         addSubview(hideButton)
-        pasteControl.identify("key.paste")
-        addSubview(pasteControl)
 
         scrollView.addSubview(pageButton)
         pageButton.addAction(UIAction { [weak self] _ in
@@ -103,9 +94,6 @@ final class KeyRowView: UIInputView {
         let hideWidth = hideButton.intrinsicContentSize.width
         hideButton.frame = CGRect(x: bounds.width - safeAreaInsets.right - 8 - hideWidth, y: (height - 38) / 2,
                                   width: hideWidth, height: 38)
-        // Paste just left of it, the size of a key
-        pasteControl.frame = CGRect(x: hideButton.frame.minX - 6 - 44, y: (height - 44) / 2, width: 44, height: 44)
-        let fixedStart = pasteControl.frame.minX + 3
         // The keys run the full width, under the hide button
         scrollView.frame = bounds
         // Fn, then the page's keys, side by side 6 pt apart
@@ -115,10 +103,10 @@ final class KeyRowView: UIInputView {
             key.frame = CGRect(x: x, y: (height - 38) / 2, width: width, height: 38)
             x += width + 6
         }
-        // Room at the end for Paste and the hide button, so the last key scrolls fully into view beside them
-        scrollView.contentSize = CGSize(width: x + (bounds.width - fixedStart), height: height)
-        // The keys fade out from just before Paste to its middle
-        scrollView.fade = (fixedStart - 10, pasteControl.frame.midX)
+        // Room at the end for the hide button, so the last key scrolls fully into view beside it
+        scrollView.contentSize = CGSize(width: x + (bounds.width - hideButton.frame.minX), height: height)
+        // The keys fade out from just before the button to its middle
+        scrollView.fade = (hideButton.frame.minX - 10, hideButton.frame.midX)
     }
 
     // MARK: Keys

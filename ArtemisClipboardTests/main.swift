@@ -27,7 +27,7 @@ typealias State = ClipboardSyncState
 // MARK: - Decisions
 
 do {
-    // Paste with the text in hand (the Paste control, UIKit's paste): onto the PC, then Ctrl+V
+    // Paste with the text in hand (UIKit's paste): onto the PC, then Ctrl+V
     var state = State(localKnownCount: 5)
     check("paste: the text goes to the PC", state.paste("hello", changeCount: 6) == .send("hello"))
     check("paste: …and the pasteboard counts as known", state.localKnownCount == 6, "\(String(describing: state.localKnownCount))")
@@ -177,10 +177,10 @@ do {
     idle()
     check("back in the session: the pasteboard isn't read", board.reads == 0 && host.posts.isEmpty, "reads \(board.reads) posts \(host.posts)")
 
-    // The Paste control: the text it hands over goes to the PC, then Ctrl+V
+    // UIKit's paste: the text it hands over goes to the PC, then Ctrl+V
     check("Paste: Ctrl+V once the text is on the PC", paste(sync, "copied in another app") == .ctrlV)
     check("Paste: the PC got the text", host.posts == ["copied in another app"], "\(host.posts)")
-    check("Paste: the pasteboard isn't read by the app (the control hands the text over)", board.reads == 0, "\(board.reads)")
+    check("Paste: the pasteboard isn't read by the app (UIKit hands the text over)", board.reads == 0, "\(board.reads)")
     check("Paste again: Ctrl+V without sending again", paste(sync, "copied in another app") == .ctrlV && host.posts.count == 1, "\(host.posts)")
     check("Ctrl+V after Paste: the pasteboard isn't read again", paste(sync) == .ctrlV && board.reads == 0, "\(board.reads)")
 
