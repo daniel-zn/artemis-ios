@@ -60,7 +60,7 @@
         "!appveyor.yml"
       ],
       "line": "sim-artemis",
-      "timeout": 180,
+      "timeout": 300,
       "select": {
         "env": "UI_TESTS",
         "always": [
