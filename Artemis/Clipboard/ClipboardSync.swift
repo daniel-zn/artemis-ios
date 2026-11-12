@@ -6,7 +6,7 @@
 //  /actions/clipboard?type=text (the one the Mac app and Artemis for Android use; it needs the
 //  client's clipboard_read / clipboard_set permissions in Apollo and a running session).
 //
-//  iPhone → PC: only when Daniel pastes in the session (the Paste control, UIKit's paste, ⌘V,
+//  iPhone → PC: only when the user pastes in the session (the Paste control, UIKit's paste, ⌘V,
 //  Ctrl+V): the text goes onto the PC's clipboard, then Ctrl+V pastes it there. Nothing reads
 //  the pasteboard when the session starts or comes back, so iOS never asks "Allow Paste" for
 //  that. PC → iPhone: every couple of seconds,

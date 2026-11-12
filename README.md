@@ -52,8 +52,8 @@ Changes from upstream so far:
   after a session, and the rest compared in [docs/PARITY.md](docs/PARITY.md).
 - Game controllers: passed to the PC as gamepads (upstream's ControllerSupport, without the on-screen gamepad), or
   the PC's mouse while Start / Menu is held for a moment (`Artemis/Desktop/GamepadMouse.swift`, docs/TOUCH.md).
-- In the Games category (App Store Connect and `LSApplicationCategoryType`), with Game Mode (`GCSupportsGameMode`)
-  and extended-gamepad support declared, so the App Store build shows in Apple's Games app.
+- In the Productivity category (App Store Connect and `LSApplicationCategoryType`), with Game Mode
+  (`GCSupportsGameMode`) and extended-gamepad support declared.
 - `Scripts/testflight.sh` and `Scripts/asc.py` upload builds to TestFlight (internal testing only).
 - Build from the command line with `-scmProvider system`. If Xcode's own package download hangs on the OpenSSL
   binary, download its zip once into `~/Library/Caches/org.swift.swiftpm/artifacts/` under the URL-derived name

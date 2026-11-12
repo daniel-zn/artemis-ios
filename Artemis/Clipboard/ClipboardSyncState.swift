@@ -5,7 +5,7 @@
 //  The decisions of the shared clipboard (plain text) with an Apollo PC, without any I/O
 //  (ClipboardSync does the requests and the pasteboard). As the Mac app's ClipboardSyncState,
 //  with iOS's pasteboard in mind: reading it can bring up "Allow Paste" or a "pasted from"
-//  notice, so it's read only when Daniel pastes in the session: the Paste control and UIKit's
+//  notice, so it's read only when the user pastes in the session: the Paste control and UIKit's
 //  paste hand over the text themselves (no question), and Ctrl+V reads it only when its
 //  changeCount moved since we last knew it and it has text.
 //

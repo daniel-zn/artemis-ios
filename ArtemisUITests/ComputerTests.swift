@@ -306,7 +306,7 @@ final class ComputerTests: XCTestCase {
         XCTAssertTrue(desktop.exists, "\(tag): TOWER's apps didn't open (\(tower.exists ? tower.label : "-"))")
     }
 
-    /// Daniel's case: an awake PC whose answer comes in after Cancel (-ArtemisTestFakePCHold: the
+    /// A reported case: an awake PC whose answer comes in after Cancel (-ArtemisTestFakePCHold: the
     /// open's serverinfo answer waits until just after Cancel). The row stays Online, and the
     /// next tap connects, it doesn't wake the PC. The Cancel button is red (destructive).
     func testCancelThenTapConnectsRealPath() {
