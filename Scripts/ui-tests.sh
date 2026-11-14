@@ -59,9 +59,8 @@ xcrun simctl spawn "$SIM" defaults write com.apple.keyboard.preferences DidShowC
 # A help link opened in an earlier run would leave a "◀ Safari" in the status bar
 xcrun simctl terminate "$SIM" com.apple.mobilesafari 2>/dev/null || true
 
-# -packageAuthorizationProvider netrc: with the keychain (the default), downloading OpenSSL's binary
-# artifact first looks up a github.com login there, which waits forever while the Mac is locked
-# (once SwiftPM's artifact cache is gone). The packages are public: no login needed.
+# Packages first, with a time limit (Scripts/resolve-packages.sh says why: a hang fails in minutes).
+Scripts/resolve-packages.sh ArtemisUITests "$DD" "$OUT/resolve.log" || exit 1
 xcodebuild build-for-testing -project Moonlight.xcodeproj -scheme ArtemisUITests -scmProvider system -packageAuthorizationProvider netrc \
   -destination "platform=iOS Simulator,id=$SIM" -derivedDataPath "$DD" > "$OUT/build.log" 2>&1 \
   || { grep -E "error:" "$OUT/build.log" | head -20; exit 1; }
