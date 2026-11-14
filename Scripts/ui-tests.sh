@@ -63,7 +63,14 @@ xcrun simctl terminate "$SIM" com.apple.mobilesafari 2>/dev/null || true
 Scripts/resolve-packages.sh ArtemisUITests "$DD" "$OUT/resolve.log" || exit 1
 xcodebuild build-for-testing -project Moonlight.xcodeproj -scheme ArtemisUITests -scmProvider system -packageAuthorizationProvider netrc \
   -destination "platform=iOS Simulator,id=$SIM" -derivedDataPath "$DD" > "$OUT/build.log" 2>&1 \
-  || { grep -E "error:" "$OUT/build.log" | head -20; exit 1; }
+  || {
+    grep -E "error:|failed with a nonzero exit code" "$OUT/build.log" | head -20
+    # Xcode's own log of the build (each step's full output) lives in the derived data, which
+    # integrate removes after the run: kept next to build.log, so a step that failed without a
+    # message (an actool run, 2026-11-14) can be looked into afterwards.
+    cp "$DD"/Logs/Build/*.xcactivitylog "$OUT/" 2>/dev/null && echo "Xcode's build log: $OUT/$(cd "$OUT" && ls -t *.xcactivitylog | head -1)"
+    exit 1
+  }
 
 # Every selected test ran (passed, failed or skipped) in this appearance's log or its result
 # bundle (xcodebuild's output sometimes loses a stretch of lines, results and all); a whole class
