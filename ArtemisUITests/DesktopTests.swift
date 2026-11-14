@@ -453,10 +453,10 @@ final class DesktopTests: XCTestCase {
         return n.count == 4 ? CGRect(x: n[0], y: n[1], width: n[2], height: n[3]) : .null
     }
 
-    /// Waits (up to 3 s) until the element is gone.
+    /// Waits until the element is gone: up to 10 s, as one accessibility query alone took over 2 s on a busy Mac.
     private func gone(_ element: XCUIElement) -> Bool {
         XCTWaiter.wait(for: [XCTNSPredicateExpectation(predicate: NSPredicate(format: "exists == false"), object: element)],
-                       timeout: 3) == .completed
+                       timeout: 10) == .completed
     }
 
     /// The hide-keyboard button sits at the right end of the key row on its own glass; the keys

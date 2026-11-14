@@ -665,6 +665,9 @@ final class DesktopViewController: UIViewController {
         UIView.animate(springDuration: 0.4, bounce: 0, options: [.allowUserInteraction, .beginFromCurrentState]) {
             self.view.layoutIfNeeded()
         }
+        // The trackpad may have left (or come back): VoiceOver reads the screen again rather than
+        // keep a stale tree, which on a busy device lingered for seconds
+        UIAccessibility.post(notification: .layoutChanged, argument: nil)
     }
 
     // MARK: Control bar
