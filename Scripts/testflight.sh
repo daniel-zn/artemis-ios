@@ -12,7 +12,9 @@
 # and installs it; it expires with the certificate, then run that again).
 # Run it in a logged-in session: the login keychain is locked elsewhere (e.g. over SSH).
 # The app is called Artemis; the Xcode target and the built Moonlight.app keep upstream's name.
-# xcodebuild resolves the OpenSSL package with the system git (-scmProvider system).
+# xcodebuild resolves the OpenSSL package with the system git (-scmProvider system), and without the
+# keychain (-packageAuthorizationProvider netrc): its github.com lookup for the binary artifact waits
+# forever while the Mac is locked.
 # The build number is the commit count, so every upload from a new commit is higher than the last.
 # --validate-only signs the export and checks every bundle in it without uploading.
 # The app signs with Signing/Artemis.entitlements (the target's CODE_SIGN_ENTITLEMENTS): the multicast
@@ -40,7 +42,7 @@ rm -rf "$OUT" && mkdir -p "$OUT"
 AUTH=(-allowProvisioningUpdates -authenticationKeyPath "$KEY" -authenticationKeyID "$ASC_KEY_ID" -authenticationKeyIssuerID "$ASC_ISSUER_ID")
 
 echo "Archiving build $BUILD…"
-xcodebuild archive -project Moonlight.xcodeproj -scheme Moonlight -scmProvider system -configuration Release \
+xcodebuild archive -project Moonlight.xcodeproj -scheme Moonlight -scmProvider system -packageAuthorizationProvider netrc -configuration Release \
   -destination 'generic/platform=iOS' -archivePath "$OUT/Artemis.xcarchive" -derivedDataPath "$OUT/dd" \
   CURRENT_PROJECT_VERSION="$BUILD" DEVELOPMENT_TEAM=6G4QGZ2Q95 CODE_SIGN_STYLE=Automatic \
   "${AUTH[@]}" > "$OUT/archive.log" 2>&1 || { tail -30 "$OUT/archive.log"; exit 1; }
