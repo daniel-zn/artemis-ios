@@ -90,6 +90,7 @@ capability is on the App ID.
 * Install Xcode from the [App Store page](https://apps.apple.com/us/app/xcode/id497799835)
 * Run `git clone --recursive https://github.com/moonlight-stream/moonlight-ios.git`
   *  If you've already clone the repo without `--recursive`, run `git submodule update --init --recursive`
+  *  A new `git worktree` has none of them checked out either: run the same command in it before building (otherwise moonlight-common fails with "Build input file cannot be found")
 * Open Moonlight.xcodeproj in Xcode
 * To run on a real device, you will need to locally modify the signing options:
     * Click on "Moonlight" at the top of the left sidebar
