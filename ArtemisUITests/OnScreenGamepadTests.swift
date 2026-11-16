@@ -150,6 +150,50 @@ final class OnScreenGamepadTests: XCTestCase {
         app.terminate()
     }
 
+    /// Opening or closing the controller never moves the floating bar, in either orientation:
+    /// only the user's drag does, and where they put it stays, with the controller up or not.
+    func testControllerLeavesBarInPlace() {
+        for (orientation, name) in [(UIDeviceOrientation.landscapeLeft, "landscape"), (.portrait, "portrait")] {
+            let tag = "\(appearance)-\(name)-bar-stays"
+            let (app, desktop) = connect(orientation: orientation)
+            func toggleController(_ step: String, shown: Bool) {
+                app.buttons["bar.gamepad"].tap()
+                let pad = app.buttons["pad.A"]
+                XCTAssertTrue(shown ? pad.waitForExistence(timeout: 5) : pad.waitForNonExistence(timeout: 5), "\(tag) \(step): the controller isn't \(shown ? "shown" : "hidden")")
+                sleep(1)
+            }
+            func assertStays(_ expected: CGRect, _ step: String) {
+                let bar = barState(desktop).bar
+                XCTAssertEqual(bar.midX, expected.midX, accuracy: 1, "\(tag) \(step): the bar moved (\(expected) → \(bar))")
+                XCTAssertEqual(bar.midY, expected.midY, accuracy: 1, "\(tag) \(step): the bar moved (\(expected) → \(bar))")
+            }
+            let start = barState(desktop).bar
+            toggleController("open", shown: true)
+            assertStays(start, "opening the controller")
+            shot("\(tag)-1-controller")
+            toggleController("close", shown: false)
+            assertStays(start, "closing the controller")
+
+            if orientation != .portrait {
+                // The user's drag moves it, and it stays there as the controller comes and goes
+                dragBar(app, to: "right", folded: false)
+                let moved = barState(desktop).bar
+                XCTAssertGreaterThan(moved.midX, start.midX + 80, "\(tag): the drag didn't move the bar (\(start) → \(moved))")
+                toggleController("open after the drag", shown: true)
+                assertStays(moved, "opening the controller after the drag")
+                // Moved with the controller up, it stays there when it closes
+                dragBar(app, to: "left", folded: false)
+                let movedAgain = barState(desktop).bar
+                XCTAssertLessThan(movedAgain.midX, moved.midX - 80, "\(tag): the drag over the controller didn't move the bar (\(moved) → \(movedAgain))")
+                toggleController("close after the drag", shown: false)
+                assertStays(movedAgain, "closing the controller after the drag")
+                shot("\(tag)-2-dragged")
+            }
+            app.terminate()
+            XCUIDevice.shared.orientation = .portrait
+        }
+    }
+
     /// Large text: the bar, with the controller button, still fits; the gamepad too.
     func testGamepadLargeText() {
         for (orientation, name) in [(UIDeviceOrientation.portrait, "portrait"), (.landscapeLeft, "landscape")] {
