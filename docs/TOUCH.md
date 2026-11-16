@@ -72,8 +72,10 @@ indicator (`DesktopTests/testUprightBarSpacedLikeLandscape`).
   button; Settings › Touch & Pointer › Show control bar decides whether a session starts unfolded. Folded and
   left untouched for 5 seconds, the button fades from Liquid Glass to a flat, faint disc so it hides over the
   desktop (its accessibility value says "Faded"); a touch brings the glass back at once and the 5 seconds start
-  again (`testFoldedBarFades`). Opening or closing the on-screen controller never moves the bar:
-  only the user's drag does, and it stays where they put it (`OnScreenGamepadTests/testControllerLeavesBarInPlace`).
+  again (`testFoldedBarFades`). Until the user moves it, the bar sits at the top centre in landscape, just under
+  the on-screen controller's shoulders, so it covers none of its controls. Opening or closing the controller never
+  moves the bar: only the user's drag does, and it stays where they put it
+  (`OnScreenGamepadTests/testControllerLeavesBarInPlace`).
 
 ## Keyboard
 

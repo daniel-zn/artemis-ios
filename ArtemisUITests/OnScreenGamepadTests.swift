@@ -168,10 +168,25 @@ final class OnScreenGamepadTests: XCTestCase {
                 XCTAssertEqual(bar.midY, expected.midY, accuracy: 1, "\(tag) \(step): the bar moved (\(expected) → \(bar))")
             }
             let (screen, _, start) = barState(desktop)
-            // At the default place (the launch argument), not where an earlier test left it
+            // At the default place (never moved), not where an earlier test left it: centred, and in
+            // landscape at the top, over the desktop's picture with nothing else there
             XCTAssertEqual(start.midX, screen.width / 2, accuracy: 1, "\(tag): the bar doesn't start centred (\(start))")
+            if orientation != .portrait {
+                XCTAssertLessThan(start.maxY, screen.height / 2, "\(tag): the bar doesn't start at the top (\(start))")
+                for id in ["bar.resetZoom", "pad.A"] {
+                    let element = control(app, id)
+                    XCTAssertFalse(element.exists && element.frame.intersects(start), "\(tag): the bar covers \(id)")
+                }
+                shot("\(tag)-0-desktop")
+            }
             toggleController("open", shown: true)
             assertStays(start, "opening the controller")
+            // Never moved, it covers none of the controller's controls
+            for id in ["LT", "LB", "RB", "RT", "L3", "R3", "leftStick", "rightStick", "dpad", "A", "B", "X", "Y", "Select", "Guide", "Start"] {
+                let element = control(app, "pad.\(id)")
+                XCTAssertTrue(element.exists, "\(tag): no pad.\(id)")
+                XCTAssertFalse(element.frame.intersects(start), "\(tag): the bar \(start) covers pad.\(id) \(element.frame)")
+            }
             shot("\(tag)-1-controller")
             toggleController("close", shown: false)
             assertStays(start, "closing the controller")
@@ -363,7 +378,7 @@ final class OnScreenGamepadTests: XCTestCase {
         let tag = "\(appearance)-landscape-folded-bar"
         let app = XCUIApplication()
         app.launchArguments = ["-ArtemisDemo", "YES", "-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryL",
-                               "-ArtemisShowControlBar", "YES", "-ArtemisBarCenter", "\"{0.5, 0.92}\""]
+                               "-ArtemisShowControlBar", "YES", "-ArtemisBarCenter", ""]
         app.launch()
         XCUIDevice.shared.orientation = .landscapeLeft
         let workstation = app.buttons["computer.WORKSTATION"]
@@ -764,10 +779,10 @@ final class OnScreenGamepadTests: XCTestCase {
     private func connect(size: String = "UICTContentSizeCategoryL", orientation: UIDeviceOrientation,
                          extra: [String] = []) -> (XCUIApplication, XCUIElement) {
         let app = XCUIApplication()
-        // The bar's place quoted: bare, {…} reads as a property-list dictionary, which isn't valid, and the
-        // argument is dropped (the bar starts where the last test left it)
+        // -ArtemisBarCenter "": the bar never moved (its default place). A place given here must be quoted,
+        // "\"{x, y}\"": bare, {…} reads as a property-list dictionary, isn't valid, and is dropped
         app.launchArguments = ["-ArtemisDemo", "YES", "-UIPreferredContentSizeCategoryName", size,
-                               "-ArtemisShowControlBar", "YES", "-ArtemisBarCenter", "\"{0.5, 0.92}\""] + extra
+                               "-ArtemisShowControlBar", "YES", "-ArtemisBarCenter", ""] + extra
         app.launch()
         XCUIDevice.shared.orientation = orientation
         let workstation = app.buttons["computer.WORKSTATION"]

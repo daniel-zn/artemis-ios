@@ -69,8 +69,9 @@ final class DesktopViewController: UIViewController {
     private var buttonModifiers: [MouseButton: [Modifier]] = [:]
 
     /// The floating bar's centre, as a fraction of the screen (landscape): where the user last
-    /// put it. Only their drag moves it (not the controller coming or going).
-    private var barCenter: CGPoint
+    /// put it (nil: never moved, top centre clear of the controller's controls). Only their drag
+    /// moves it (not the controller coming or going).
+    private var barCenter: CGPoint?
     private var barDragStart: CGPoint?
 
     /// Called when the demo's recorded input or the view's state changes (UI tests).
@@ -91,8 +92,8 @@ final class DesktopViewController: UIViewController {
         let absolute = (DataManager().getSettings()?.absoluteTouchMode) ?? false
         let pointer = PointerSettings.load()
         session = DesktopSession(title: title, mode: absolute ? .direct : .trackpad, barExpanded: pointer.showControlBar)
-        let saved = UserDefaults.standard.string(forKey: "ArtemisBarCenter").map(NSCoder.cgPoint(for:))
-        barCenter = saved ?? CGPoint(x: 0.5, y: 0.92)
+        // Empty: never moved (the UI tests start each session with it so)
+        barCenter = UserDefaults.standard.string(forKey: "ArtemisBarCenter").flatMap { $0.isEmpty ? nil : NSCoder.cgPoint(for: $0) }
         self.localCursor = localCursor ? UIImageView(image: DesktopViewController.cursorImage) : nil
         super.init(nibName: nil, bundle: nil)
     }
@@ -285,7 +286,7 @@ final class DesktopViewController: UIViewController {
             let top = max(insets.top, 10), bottom = max(insets.bottom, 10)
             let area = CGRect(x: left, y: top, width: bounds.width - left - right, height: bounds.height - top - bottom)
             gamepad.layout(area: area, overDesktop: true, scale: padSize, opacity: AppPreferences.onScreenGamepadOpacity)
-            let wanted = barCenter
+            let wanted = barCenter ?? PadLayout.barCenter(area: area, bounds: bounds.size, barSize: barSize, scale: padSize)
             let orientation = view.window?.windowScene?.effectiveGeometry.interfaceOrientation
             let housing: CGRectEdge? = insets.left < 1 && insets.right < 1 ? nil
                 : orientation == .landscapeRight ? .minXEdge : orientation == .landscapeLeft ? .maxXEdge : nil
@@ -753,8 +754,9 @@ final class DesktopViewController: UIViewController {
             // Remember where it ended up (clamped inside the screen)
             let bounds = self.view.bounds
             let bar = self.barPlacement.frame
-            self.barCenter = CGPoint(x: bar.midX / bounds.width, y: bar.midY / bounds.height)
-            UserDefaults.standard.set(NSCoder.string(for: self.barCenter), forKey: "ArtemisBarCenter")
+            let center = CGPoint(x: bar.midX / bounds.width, y: bar.midY / bounds.height)
+            self.barCenter = center
+            UserDefaults.standard.set(NSCoder.string(for: center), forKey: "ArtemisBarCenter")
             self.updateAccessibilityValue()
         }
         actions.setBarExpanded = { [weak self] expanded in

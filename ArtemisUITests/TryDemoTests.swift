@@ -19,7 +19,7 @@ final class TryDemoTests: XCTestCase {
         let app = XCUIApplication()
         app.launchArguments = ["-ArtemisDemo", "NO", "-ArtemisTestNoPCs", "YES",
                                "-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryL",
-                               "-ArtemisShowControlBar", "YES", "-ArtemisBarCenter", "\"{0.5, 0.92}\""]
+                               "-ArtemisShowControlBar", "YES", "-ArtemisBarCenter", ""]
         app.launch()
 
         let tryDemo = app.buttons["computers.tryDemo"]

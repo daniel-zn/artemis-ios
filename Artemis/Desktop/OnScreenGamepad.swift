@@ -123,6 +123,14 @@ enum PadLayout {
                stick(left: false, round(rightX, lower, stick))]
     }
 
+    /// The floating bar's place until the user moves it (landscape), as a fraction of the screen:
+    /// top centre, just under the shoulders, so it covers none of the controls when they come up.
+    static func barCenter(area: CGRect, bounds: CGSize, barSize: CGSize, scale: Double) -> CGPoint {
+        let unit = unit(in: area, scale: scale, phoneWidth: min(bounds.width, bounds.height))
+        let y = area.minY + (shoulder.height + gap) * unit + barSize.height / 2
+        return CGPoint(x: area.midX / bounds.width, y: y / bounds.height)
+    }
+
     private static func isWide(_ area: CGRect) -> Bool {
         area.width > area.height
     }
