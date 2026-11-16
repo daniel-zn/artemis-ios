@@ -26,7 +26,7 @@ final class MicrophoneTests: XCTestCase {
 
     private func launch(_ arguments: [String] = [], app: XCUIApplication = XCUIApplication()) -> XCUIApplication {
         app.launchArguments = ["-ArtemisDemo", "YES", "-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryL",
-                               "-ArtemisShowControlBar", "YES", "-ArtemisBarCenter", "{0.5, 0.92}"] + arguments
+                               "-ArtemisShowControlBar", "YES", "-ArtemisBarCenter", "\"{0.5, 0.92}\""] + arguments
         app.launch()
         XCTAssertTrue(app.buttons["computer.WORKSTATION"].waitForExistence(timeout: 15), "no demo PCs")
         return app

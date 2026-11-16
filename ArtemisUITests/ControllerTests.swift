@@ -39,7 +39,7 @@ final class ControllerTests: XCTestCase {
     private func run(_ script: String, orientation: UIDeviceOrientation, extra: [String] = []) -> (XCUIApplication, String, [String]) {
         let app = XCUIApplication()
         app.launchArguments = ["-ArtemisDemo", "YES", "-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryL",
-                               "-ArtemisShowControlBar", "YES", "-ArtemisBarCenter", "{0.5, 0.92}",
+                               "-ArtemisShowControlBar", "YES", "-ArtemisBarCenter", "\"{0.5, 0.92}\"",
                                "-ArtemisDemoGamepad", script] + extra
         app.launch()
         XCUIDevice.shared.orientation = orientation
@@ -120,7 +120,7 @@ final class ControllerTests: XCTestCase {
     private func connected(_ script: String, orientation: UIDeviceOrientation = .portrait) -> (XCUIApplication, String, String?, [String]) {
         let app = XCUIApplication()
         app.launchArguments = ["-ArtemisDemo", "YES", "-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryL",
-                               "-ArtemisShowControlBar", "YES", "-ArtemisBarCenter", "{0.5, 0.92}",
+                               "-ArtemisShowControlBar", "YES", "-ArtemisBarCenter", "\"{0.5, 0.92}\"",
                                "-ArtemisGamepadMouse", "YES", "-ArtemisDemoController", script]
         app.launch()
         XCUIDevice.shared.orientation = orientation

@@ -694,7 +694,7 @@ final class DesktopTests: XCTestCase {
     private func connect(size: String = "UICTContentSizeCategoryL", orientation: UIDeviceOrientation, extra: [String] = []) -> (XCUIApplication, XCUIElement) {
         let app = XCUIApplication()
         app.launchArguments = ["-ArtemisDemo", "YES", "-UIPreferredContentSizeCategoryName", size,
-                               "-ArtemisShowControlBar", "YES", "-ArtemisBarCenter", "{0.5, 0.92}"] + extra
+                               "-ArtemisShowControlBar", "YES", "-ArtemisBarCenter", "\"{0.5, 0.92}\""] + extra
         app.launch()
         XCUIDevice.shared.orientation = orientation
         let workstation = app.buttons["computer.WORKSTATION"]

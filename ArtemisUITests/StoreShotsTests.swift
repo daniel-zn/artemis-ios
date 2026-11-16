@@ -35,7 +35,7 @@ final class StoreShotsTests: XCTestCase {
     private func launch() -> XCUIApplication {
         let app = XCUIApplication()
         app.launchArguments = ["-ArtemisDemo", "YES", "-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryL",
-                               "-ArtemisShowControlBar", "YES", "-ArtemisBarCenter", "{0.5, 0.92}"]
+                               "-ArtemisShowControlBar", "YES", "-ArtemisBarCenter", "\"{0.5, 0.92}\""]
         app.launch()
         XCTAssertTrue(app.buttons["computer.WORKSTATION"].waitForExistence(timeout: 15), "no demo PCs")
         return app

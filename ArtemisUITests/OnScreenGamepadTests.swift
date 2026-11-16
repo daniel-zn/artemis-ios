@@ -167,7 +167,9 @@ final class OnScreenGamepadTests: XCTestCase {
                 XCTAssertEqual(bar.midX, expected.midX, accuracy: 1, "\(tag) \(step): the bar moved (\(expected) → \(bar))")
                 XCTAssertEqual(bar.midY, expected.midY, accuracy: 1, "\(tag) \(step): the bar moved (\(expected) → \(bar))")
             }
-            let start = barState(desktop).bar
+            let (screen, _, start) = barState(desktop)
+            // At the default place (the launch argument), not where an earlier test left it
+            XCTAssertEqual(start.midX, screen.width / 2, accuracy: 1, "\(tag): the bar doesn't start centred (\(start))")
             toggleController("open", shown: true)
             assertStays(start, "opening the controller")
             shot("\(tag)-1-controller")
@@ -361,7 +363,7 @@ final class OnScreenGamepadTests: XCTestCase {
         let tag = "\(appearance)-landscape-folded-bar"
         let app = XCUIApplication()
         app.launchArguments = ["-ArtemisDemo", "YES", "-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryL",
-                               "-ArtemisShowControlBar", "YES", "-ArtemisBarCenter", "{0.5, 0.92}"]
+                               "-ArtemisShowControlBar", "YES", "-ArtemisBarCenter", "\"{0.5, 0.92}\""]
         app.launch()
         XCUIDevice.shared.orientation = .landscapeLeft
         let workstation = app.buttons["computer.WORKSTATION"]
@@ -762,8 +764,10 @@ final class OnScreenGamepadTests: XCTestCase {
     private func connect(size: String = "UICTContentSizeCategoryL", orientation: UIDeviceOrientation,
                          extra: [String] = []) -> (XCUIApplication, XCUIElement) {
         let app = XCUIApplication()
+        // The bar's place quoted: bare, {…} reads as a property-list dictionary, which isn't valid, and the
+        // argument is dropped (the bar starts where the last test left it)
         app.launchArguments = ["-ArtemisDemo", "YES", "-UIPreferredContentSizeCategoryName", size,
-                               "-ArtemisShowControlBar", "YES", "-ArtemisBarCenter", "{0.5, 0.92}"] + extra
+                               "-ArtemisShowControlBar", "YES", "-ArtemisBarCenter", "\"{0.5, 0.92}\""] + extra
         app.launch()
         XCUIDevice.shared.orientation = orientation
         let workstation = app.buttons["computer.WORKSTATION"]
