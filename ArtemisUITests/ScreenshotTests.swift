@@ -29,7 +29,7 @@ final class ScreenshotTests: XCTestCase {
         let app = XCUIApplication()
         app.launchArguments = ["-ArtemisDemo", "YES", "-UIPreferredContentSizeCategoryName", textSizes[size]!,
                                // Where the bar was left by another test doesn't carry over
-                               "-ArtemisBarCenter", "{0.5, 0.92}", "-ArtemisGamepadBarCenter2", ""] + arguments
+                               "-ArtemisBarCenter", "{0.5, 0.92}"] + arguments
         app.launch()
         return app
     }

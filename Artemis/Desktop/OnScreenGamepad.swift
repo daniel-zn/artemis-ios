@@ -123,17 +123,6 @@ enum PadLayout {
                stick(left: false, round(rightX, lower, stick))]
     }
 
-    /// Where the control bar goes while the pad lies over the desktop (landscape), as a fraction
-    /// of the screen: top centre between the shoulders, or under them if it doesn't fit there.
-    static func barCenter(area: CGRect, bounds: CGSize, barSize: CGSize, scale: Double) -> CGPoint {
-        let unit = unit(in: area, scale: scale, phoneWidth: min(bounds.width, bounds.height))
-        let between = area.width - 2 * shoulderGroup * unit
-        let y = between >= barSize.width + 16
-            ? area.minY + shoulder.height * unit / 2
-            : area.minY + (shoulder.height + gap) * unit + barSize.height / 2
-        return CGPoint(x: area.midX / bounds.width, y: y / bounds.height)
-    }
-
     private static func isWide(_ area: CGRect) -> Bool {
         area.width > area.height
     }

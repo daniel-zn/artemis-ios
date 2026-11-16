@@ -37,7 +37,7 @@ final class LiveScrollTests: XCTestCase {
 
         let app = XCUIApplication()
         app.launchArguments = ["-ArtemisDemo", "NO", "-ArtemisQuitAppAfterSession", "YES", "-ArtemisShowControlBar", "YES",
-                               "-ArtemisBarCenter", "{0.5, 0.92}", "-ArtemisGamepadBarCenter2", ""]
+                               "-ArtemisBarCenter", "{0.5, 0.92}"]
         app.launch()
         XCUIDevice.shared.orientation = .portrait
 

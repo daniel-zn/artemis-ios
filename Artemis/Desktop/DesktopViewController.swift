@@ -68,10 +68,9 @@ final class DesktopViewController: UIViewController {
     private var lastMomentumTime: CFTimeInterval = 0
     private var buttonModifiers: [MouseButton: [Modifier]] = [:]
 
-    /// The floating bar's centre, as a fraction of the screen (landscape).
+    /// The floating bar's centre, as a fraction of the screen (landscape): where the user last
+    /// put it. Only their drag moves it (not the controller coming or going).
     private var barCenter: CGPoint
-    /// Its centre while the controller is over the desktop (nil: top centre, between the controls).
-    private var gamepadBarCenter: CGPoint?
     private var barDragStart: CGPoint?
 
     /// Called when the demo's recorded input or the view's state changes (UI tests).
@@ -94,8 +93,6 @@ final class DesktopViewController: UIViewController {
         session = DesktopSession(title: title, mode: absolute ? .direct : .trackpad, barExpanded: pointer.showControlBar)
         let saved = UserDefaults.standard.string(forKey: "ArtemisBarCenter").map(NSCoder.cgPoint(for:))
         barCenter = saved ?? CGPoint(x: 0.5, y: 0.92)
-        // Empty: not moved (the UI tests start each session with it so)
-        gamepadBarCenter = UserDefaults.standard.string(forKey: "ArtemisGamepadBarCenter2").flatMap { $0.isEmpty ? nil : NSCoder.cgPoint(for: $0) }
         self.localCursor = localCursor ? UIImageView(image: DesktopViewController.cursorImage) : nil
         super.init(nibName: nil, bundle: nil)
     }
@@ -288,9 +285,7 @@ final class DesktopViewController: UIViewController {
             let top = max(insets.top, 10), bottom = max(insets.bottom, 10)
             let area = CGRect(x: left, y: top, width: bounds.width - left - right, height: bounds.height - top - bottom)
             gamepad.layout(area: area, overDesktop: true, scale: padSize, opacity: AppPreferences.onScreenGamepadOpacity)
-            let wanted = session.gamepadShown
-                ? gamepadBarCenter ?? PadLayout.barCenter(area: area, bounds: bounds.size, barSize: barSize, scale: padSize)
-                : barCenter
+            let wanted = barCenter
             let orientation = view.window?.windowScene?.effectiveGeometry.interfaceOrientation
             let housing: CGRectEdge? = insets.left < 1 && insets.right < 1 ? nil
                 : orientation == .landscapeRight ? .minXEdge : orientation == .landscapeLeft ? .maxXEdge : nil
@@ -748,24 +743,18 @@ final class DesktopViewController: UIViewController {
             let start = self.barDragStart ?? CGPoint(x: bar.midX / bounds.width, y: bar.midY / bounds.height)
             self.barDragStart = start
             let center = CGPoint(x: start.x + translation.width / bounds.width, y: start.y + translation.height / bounds.height)
-            if self.session.gamepadShown { self.gamepadBarCenter = center } else { self.barCenter = center }
+            self.barCenter = center
             self.view.setNeedsLayout()
             self.view.layoutIfNeeded()
         }
         actions.endMoveBar = { [weak self] in
             guard let self else { return }
             self.barDragStart = nil
-            // Remember where it ended up (clamped inside the screen), with the controller up or not
+            // Remember where it ended up (clamped inside the screen)
             let bounds = self.view.bounds
             let bar = self.barPlacement.frame
-            let center = CGPoint(x: bar.midX / bounds.width, y: bar.midY / bounds.height)
-            if self.session.gamepadShown {
-                self.gamepadBarCenter = center
-                UserDefaults.standard.set(NSCoder.string(for: center), forKey: "ArtemisGamepadBarCenter2")
-            } else {
-                self.barCenter = center
-                UserDefaults.standard.set(NSCoder.string(for: center), forKey: "ArtemisBarCenter")
-            }
+            self.barCenter = CGPoint(x: bar.midX / bounds.width, y: bar.midY / bounds.height)
+            UserDefaults.standard.set(NSCoder.string(for: self.barCenter), forKey: "ArtemisBarCenter")
             self.updateAccessibilityValue()
         }
         actions.setBarExpanded = { [weak self] expanded in

@@ -28,7 +28,7 @@ final class ComputerTests: XCTestCase {
         let app = XCUIApplication()
         app.launchArguments = ["-ArtemisDemo", "YES", "-UIPreferredContentSizeCategoryName", size,
                                // Where the bar was left by another test doesn't carry over
-                               "-ArtemisBarCenter", "{0.5, 0.92}", "-ArtemisGamepadBarCenter2", ""] + arguments
+                               "-ArtemisBarCenter", "{0.5, 0.92}"] + arguments
         app.launch()
         XCTAssertTrue(app.buttons["computer.WORKSTATION"].waitForExistence(timeout: 15), "no demo PCs")
         return app

@@ -347,7 +347,7 @@ final class OnScreenGamepadTests: XCTestCase {
             }
         }
         if !portrait {
-            // The bar, between the shoulders, covers nothing
+            // The bar, where the user left it, lies over the controls: never under them
             let bar = app.buttons["bar.keyboard"]
             XCTAssertTrue(bar.isHittable, "\(tag): the bar is covered")
         }
@@ -361,7 +361,7 @@ final class OnScreenGamepadTests: XCTestCase {
         let tag = "\(appearance)-landscape-folded-bar"
         let app = XCUIApplication()
         app.launchArguments = ["-ArtemisDemo", "YES", "-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryL",
-                               "-ArtemisShowControlBar", "YES", "-ArtemisBarCenter", "{0.5, 0.92}", "-ArtemisGamepadBarCenter2", ""]
+                               "-ArtemisShowControlBar", "YES", "-ArtemisBarCenter", "{0.5, 0.92}"]
         app.launch()
         XCUIDevice.shared.orientation = .landscapeLeft
         let workstation = app.buttons["computer.WORKSTATION"]
@@ -763,7 +763,7 @@ final class OnScreenGamepadTests: XCTestCase {
                          extra: [String] = []) -> (XCUIApplication, XCUIElement) {
         let app = XCUIApplication()
         app.launchArguments = ["-ArtemisDemo", "YES", "-UIPreferredContentSizeCategoryName", size,
-                               "-ArtemisShowControlBar", "YES", "-ArtemisBarCenter", "{0.5, 0.92}", "-ArtemisGamepadBarCenter2", ""] + extra
+                               "-ArtemisShowControlBar", "YES", "-ArtemisBarCenter", "{0.5, 0.92}"] + extra
         app.launch()
         XCUIDevice.shared.orientation = orientation
         let workstation = app.buttons["computer.WORKSTATION"]
